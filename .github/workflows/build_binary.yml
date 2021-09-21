@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: example earthly test
+    name: Set up Earthly and run build
     runs-on: ubuntu-latest
     steps:
       - name: Set up QEMU
