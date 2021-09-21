@@ -1,0 +1,30 @@
+name: Build and publish tdlibjson linux binaries
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  tests:
+    name: example earthly test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Earthly
+      - uses: earthly/actions/setup-earthly@v1
+
+      - name: Check out the repo
+      - uses: actions/checkout@v2
+
+      - name: run earthly build
+        run: earthly +build-all-platforms
+
+      - name: release artifacts to packages
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            build/libtdjson_linux_arm64.so
+            build/libtdjson_linux_amd64.so
