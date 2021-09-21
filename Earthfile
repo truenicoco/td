@@ -1,5 +1,5 @@
 build-all-platforms:
-    BUILD --platform=linux/arm64 --platform=linux/amd64 +build
+    BUILD --platform=linux/amd64 +build
 
 builder:
     FROM debian:bullseye

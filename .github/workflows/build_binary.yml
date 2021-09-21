@@ -25,6 +25,4 @@ jobs:
       - name: release artifacts to packages
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            build/libtdjson_linux_arm64.so
-            build/libtdjson_linux_amd64.so
+          files: build/libtdjson_linux_amd64.so
