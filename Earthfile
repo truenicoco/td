@@ -2,7 +2,7 @@ build-all-platforms:
     BUILD --platform=linux/arm64 --platform=linux/amd64 +build
 
 builder:
-    FROM debian:buster
+    FROM debian:bullseye
 
     ENV DEBIAN_FRONTEND noninteractive
     ENV DEBCONF_NONINTERACTIVE_SEEN true
@@ -18,18 +18,11 @@ builder:
         libc++abi-dev \
         && rm -rf /var/lib/apt/lists/*
 
-code:
-    FROM base
-
-
 build:
     FROM +builder
-
-    ARG TARGETARCH
+    COPY ./ /code/
 
     WORKDIR /build
-
-    COPY ./ /code/
 
     RUN CXXFLAGS="-stdlib=libc++" \
         CC=/usr/bin/clang \
@@ -42,4 +35,5 @@ build:
 
     RUN cmake --build . --target install
 
+    ARG TARGETARCH
     SAVE ARTIFACT /tdlib/lib/libtdjson.so AS LOCAL build/libtdjson_linux_${TARGETARCH}.so
