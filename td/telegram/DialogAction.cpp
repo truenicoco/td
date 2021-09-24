@@ -9,6 +9,7 @@
 #include "td/telegram/misc.h"
 #include "td/telegram/ServerMessageId.h"
 
+#include "td/utils/emoji.h"
 #include "td/utils/misc.h"
 #include "td/utils/Slice.h"
 #include "td/utils/SliceBuilder.h"
@@ -20,11 +21,7 @@ bool DialogAction::is_valid_emoji(string &emoji) {
   if (!clean_input_string(emoji)) {
     return false;
   }
-  remove_emoji_modifiers_in_place(emoji);
-  if (emoji.empty()) {
-    return false;
-  }
-  return true;
+  return is_emoji(emoji);
 }
 
 void DialogAction::init(Type type) {
