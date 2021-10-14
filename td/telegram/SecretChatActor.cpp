@@ -858,7 +858,7 @@ Status SecretChatActor::do_inbound_message_encrypted(unique_ptr<log_event::Inbou
         send_update_secret_chat();
       }
       if (layer >= static_cast<int32>(SecretChatLayer::Mtproto2) && mtproto_version < 2) {
-        return Status::Error(PSLICE() << "MTProto 1.0 encryption is forbidden for this layer");
+        return Status::Error("MTProto 1.0 encryption is forbidden for this layer");
       }
       if (message_with_layer->in_seq_no_ < 0) {
         return Status::Error(PSLICE() << "Invalid seq_no: " << to_string(message_with_layer));
@@ -1304,16 +1304,6 @@ Status SecretChatActor::do_inbound_message_decrypted(unique_ptr<log_event::Inbou
                              decrypted_message_service->random_id_, std::move(save_message_finish));
         break;
       default:
-        /*
-decryptedMessageActionResend#511110b0 start_seq_no:int end_seq_no:int = DecryptedMessageAction;
-decryptedMessageActionNotifyLayer#f3048883 layer:int = DecryptedMessageAction;
-decryptedMessageActionTyping#ccb27641 action:SendMessageAction = DecryptedMessageAction;
-decryptedMessageActionRequestKey#f3c9611b exchange_id:long g_a:bytes = DecryptedMessageAction;
-decryptedMessageActionAcceptKey#6fe1735b exchange_id:long g_b:bytes key_fingerprint:long = DecryptedMessageAction;
-decryptedMessageActionAbortKey#dd05ec6b exchange_id:long = DecryptedMessageAction;
-decryptedMessageActionCommitKey#ec2e0b9b exchange_id:long key_fingerprint:long = DecryptedMessageAction;
-decryptedMessageActionNoop#a82fdd63 = DecryptedMessageAction;
-        */
         save_message_finish.set_value(Unit());
         break;
     }
@@ -1379,7 +1369,7 @@ void SecretChatActor::on_save_changes_start(ChangesProcessor<StateChange>::Id sa
 }
 
 void SecretChatActor::on_inbound_save_message_finish(uint64 state_id) {
-  if (close_flag_) {
+  if (close_flag_ || context_->close_flag()) {
     return;
   }
   auto *state = inbound_message_states_.get(state_id);

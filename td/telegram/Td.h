@@ -178,6 +178,8 @@ class Td final : public Actor {
   ActorOwn<StickersManager> stickers_manager_actor_;
   unique_ptr<ThemeManager> theme_manager_;
   ActorOwn<ThemeManager> theme_manager_actor_;
+  unique_ptr<TopDialogManager> top_dialog_manager_;
+  ActorOwn<TopDialogManager> top_dialog_manager_actor_;
   unique_ptr<UpdatesManager> updates_manager_;
   ActorOwn<UpdatesManager> updates_manager_actor_;
   unique_ptr<WebPagesManager> web_pages_manager_;
@@ -197,7 +199,6 @@ class Td final : public Actor {
   ActorOwn<SecretChatsManager> secret_chats_manager_;
   ActorOwn<StateManager> state_manager_;
   ActorOwn<StorageManager> storage_manager_;
-  ActorOwn<TopDialogManager> top_dialog_manager_;
   ActorOwn<PhoneNumberManager> verify_phone_number_manager_;
 
   class ResultHandler : public std::enable_shared_from_this<ResultHandler> {
@@ -290,7 +291,7 @@ class Td final : public Actor {
   enum class State : int32 { WaitParameters, Decrypt, Run, Close } state_ = State::WaitParameters;
   bool is_database_encrypted_ = false;
 
-  vector<std::pair<uint64, std::shared_ptr<ResultHandler>>> result_handlers_;
+  std::unordered_map<uint64, std::shared_ptr<ResultHandler>> result_handlers_;
   enum : int8 { RequestActorIdType = 1, ActorIdType = 2 };
   Container<ActorOwn<Actor>> request_actors_;
 
@@ -331,15 +332,11 @@ class Td final : public Actor {
 
   template <class T>
   friend class RequestActor;        // uses send_result/send_error
-  friend class TestQuery;           // uses send_result/send_error, TODO pass Promise<>
   friend class AuthManager;         // uses send_result/send_error, TODO pass Promise<>
   friend class PhoneNumberManager;  // uses send_result/send_error, TODO pass Promise<>
 
   void add_handler(uint64 id, std::shared_ptr<ResultHandler> handler);
   std::shared_ptr<ResultHandler> extract_handler(uint64 id);
-  void invalidate_handler(ResultHandler *handler);
-  void clear_handlers();
-  // void destroy_handler(ResultHandler *handler);
 
   void clear_requests();
 
@@ -553,7 +550,7 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::setAutoDownloadSettings &request);
 
-  void on_request(uint64 id, td_api::getTopChats &request);
+  void on_request(uint64 id, const td_api::getTopChats &request);
 
   void on_request(uint64 id, const td_api::removeTopChat &request);
 
@@ -1058,8 +1055,6 @@ class Td final : public Actor {
   void on_request(uint64 id, td_api::reportChat &request);
 
   void on_request(uint64 id, td_api::reportChatPhoto &request);
-
-  void on_request(uint64 id, td_api::getChatStatisticsUrl &request);
 
   void on_request(uint64 id, const td_api::getChatStatistics &request);
 

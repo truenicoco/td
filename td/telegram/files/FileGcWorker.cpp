@@ -82,9 +82,8 @@ void FileGcWorker::run_gc(const FileGcParameters &parameters, std::vector<FullFi
     total_size += info.size;
   }
 
-  FileStats new_stats;
-  FileStats removed_stats;
-  removed_stats.split_by_owner_dialog_id = new_stats.split_by_owner_dialog_id = parameters.dialog_limit != 0;
+  FileStats new_stats(false, parameters.dialog_limit != 0);
+  FileStats removed_stats(false, parameters.dialog_limit != 0);
 
   auto do_remove_file = [&removed_stats](const FullFileInfo &info) {
     removed_stats.add_copy(info);
@@ -133,7 +132,7 @@ void FileGcWorker::run_gc(const FileGcParameters &parameters, std::vector<FullFi
     return false;
   });
   if (token_) {
-    return promise.set_error(Status::Error(500, "Request aborted"));
+    return promise.set_error(Global::request_aborted_error());
   }
 
   // sort by max(atime, mtime)
@@ -153,7 +152,7 @@ void FileGcWorker::run_gc(const FileGcParameters &parameters, std::vector<FullFi
   size_t pos = 0;
   while (pos < files.size() && (remove_count > 0 || remove_size > 0)) {
     if (token_) {
-      return promise.set_error(Status::Error(500, "Request aborted"));
+      return promise.set_error(Global::request_aborted_error());
     }
     if (remove_count > 0) {
       remove_by_count_cnt++;

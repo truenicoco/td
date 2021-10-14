@@ -108,6 +108,7 @@ class Global final : public ActorContext {
   }
 
   void set_net_query_stats(std::shared_ptr<NetQueryStats> net_query_stats);
+
   void set_net_query_dispatcher(unique_ptr<NetQueryDispatcher> net_query_dispatcher);
 
   NetQueryDispatcher &net_query_dispatcher() {
@@ -374,11 +375,19 @@ class Global final : public ActorContext {
 #endif
   }
 
+  static Status request_aborted_error() {
+    return Status::Error(500, "Request aborted");
+  }
+
   void set_close_flag() {
     close_flag_ = true;
   }
   bool close_flag() const {
     return close_flag_.load();
+  }
+
+  Status close_status() const {
+    return close_flag() ? request_aborted_error() : Status::OK();
   }
 
   bool is_expected_error(const Status &error) const {

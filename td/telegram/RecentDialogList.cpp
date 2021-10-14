@@ -46,12 +46,14 @@ void RecentDialogList::save_dialogs() const {
   SliceBuilder sb;
   for (auto &dialog_id : dialog_ids_) {
     sb << ',';
-    if (!G()->parameters().use_message_db) {
-      // if there is no dialog database, prefer to save dialogs by username
+    if (!G()->parameters().use_chat_info_db) {
+      // if there is no dialog info database, prefer to save dialogs by username
       string username;
       switch (dialog_id.get_type()) {
         case DialogType::User:
-          username = td_->contacts_manager_->get_user_username(dialog_id.get_user_id());
+          if (!td_->contacts_manager_->is_user_contact(dialog_id.get_user_id())) {
+            username = td_->contacts_manager_->get_user_username(dialog_id.get_user_id());
+          }
           break;
         case DialogType::Chat:
           break;
@@ -105,8 +107,11 @@ void RecentDialogList::load_dialogs(Promise<Unit> &&promise) {
     }
   }
   if (!dialog_ids.empty()) {
-    if (G()->parameters().use_message_db) {
-      td_->messages_manager_->load_dialogs(std::move(dialog_ids), mpas.get_promise());
+    if (G()->parameters().use_chat_info_db) {
+      td_->messages_manager_->load_dialogs(
+          std::move(dialog_ids),
+          PromiseCreator::lambda(
+              [promise = mpas.get_promise()](vector<DialogId> dialog_ids) mutable { promise.set_value(Unit()); }));
     } else {
       td_->messages_manager_->get_dialogs_from_list(
           DialogListId(FolderId::main()), 102,
@@ -124,6 +129,13 @@ void RecentDialogList::on_load_dialogs(vector<string> &&found_dialogs) {
   auto promises = std::move(load_list_queries_);
   CHECK(!promises.empty());
 
+  if (G()->close_flag()) {
+    for (auto &promise : promises) {
+      promise.set_error(Global::request_aborted_error());
+    }
+    return;
+  }
+
   auto newly_found_dialogs = std::move(dialog_ids_);
   reset_to_empty(dialog_ids_);
 
@@ -135,6 +147,7 @@ void RecentDialogList::on_load_dialogs(vector<string> &&found_dialogs) {
       dialog_id = DialogId(to_integer<int64>(*it));
     }
     if (dialog_id.is_valid() && removed_dialog_ids_.count(dialog_id) == 0 &&
+        td_->messages_manager_->have_dialog_info(dialog_id) &&
         td_->messages_manager_->have_input_peer(dialog_id, AccessRights::Read)) {
       td_->messages_manager_->force_create_dialog(dialog_id, "recent dialog");
       do_add_dialog(dialog_id);

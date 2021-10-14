@@ -54,6 +54,7 @@ Result<TdDb::EncryptionInfo> check_encryption(string path) {
   Binlog binlog;
   auto status = binlog.init(path, Binlog::Callback());
   if (status.is_error() && status.code() != Binlog::Error::WrongPassword) {
+    LOG(WARNING) << "Failed to check binlog: " << status;
     return Status::Error(400, status.message());
   }
   TdDb::EncryptionInfo info;
@@ -276,6 +277,8 @@ void TdDb::do_close(Promise<> on_finished, bool destroy_flag) {
     }
     binlog_.reset();
   }
+
+  lock.set_value(Unit());
 }
 
 Status TdDb::init_sqlite(int32 scheduler_id, const TdParameters &parameters, DbKey key, DbKey old_key,
@@ -352,6 +355,9 @@ Status TdDb::init_sqlite(int32 scheduler_id, const TdParameters &parameters, DbK
   }
   if (user_version == 0) {
     binlog_pmc.erase("next_contacts_sync_date");
+    binlog_pmc.erase("saved_contact_count");
+    binlog_pmc.erase("old_featured_sticker_set_count");
+    binlog_pmc.erase("invalidate_old_featured_sticker_sets");
   }
   binlog_pmc.force_sync({});
 
