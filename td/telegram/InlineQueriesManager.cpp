@@ -6,11 +6,6 @@
 //
 #include "td/telegram/InlineQueriesManager.h"
 
-#include "td/telegram/td_api.h"
-#include "td/telegram/td_api.hpp"
-#include "td/telegram/telegram_api.h"
-#include "td/telegram/telegram_api.hpp"
-
 #include "td/telegram/AccessRights.h"
 #include "td/telegram/AnimationsManager.h"
 #include "td/telegram/AudiosManager.h"
@@ -30,18 +25,19 @@
 #include "td/telegram/MessageEntity.h"
 #include "td/telegram/MessagesManager.h"
 #include "td/telegram/misc.h"
+#include "td/telegram/net/DcId.h"
 #include "td/telegram/Payments.h"
 #include "td/telegram/Photo.h"
 #include "td/telegram/ReplyMarkup.h"
 #include "td/telegram/StickersManager.h"
 #include "td/telegram/Td.h"
+#include "td/telegram/td_api.hpp"
 #include "td/telegram/TdDb.h"
 #include "td/telegram/TdParameters.h"
+#include "td/telegram/telegram_api.hpp"
 #include "td/telegram/Venue.h"
 #include "td/telegram/VideosManager.h"
 #include "td/telegram/VoiceNotesManager.h"
-
-#include "td/telegram/net/DcId.h"
 
 #include "td/utils/algorithm.h"
 #include "td/utils/base64.h"
@@ -487,7 +483,11 @@ void InlineQueriesManager::answer_inline_query(int64 inline_query_id, bool is_pe
         if (first_name.empty()) {
           return promise.set_error(Status::Error(400, "Field \"first_name\" must be non-empty"));
         }
-        title = last_name.empty() ? first_name : first_name + " " + last_name;
+        if (last_name.empty()) {
+          title = std::move(first_name);
+        } else {
+          title = PSTRING() << first_name << ' ' << last_name;
+        }
         description = std::move(phone_number);
         thumbnail_url = std::move(contact->thumbnail_url_);
         if (!thumbnail_url.empty()) {
@@ -1459,7 +1459,7 @@ void InlineQueriesManager::on_get_inline_query_results(DialogId dialog_id, UserI
         if (result->type_ == "article") {
           auto article = make_tl_object<td_api::inlineQueryResultArticle>();
           article->id_ = std::move(result->id_);
-          article->url_ = get_web_document_url(std::move(result->content_));
+          article->url_ = get_web_document_url(result->content_);
           if (result->url_.empty()) {
             article->hide_url_ = true;
           } else {

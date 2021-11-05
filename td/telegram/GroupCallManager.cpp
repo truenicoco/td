@@ -9,6 +9,7 @@
 #include "td/telegram/AccessRights.h"
 #include "td/telegram/AuthManager.h"
 #include "td/telegram/ContactsManager.h"
+#include "td/telegram/DialogAction.h"
 #include "td/telegram/Global.h"
 #include "td/telegram/MessageId.h"
 #include "td/telegram/MessagesManager.h"
@@ -1749,6 +1750,7 @@ void GroupCallManager::on_update_group_call_participants(
           });
       td_->create_handler<GetGroupCallParticipantQuery>(std::move(query_promise))
           ->send(input_group_call_id, std::move(input_peers), {});
+      return;
     }
   }
 
@@ -1961,8 +1963,9 @@ void GroupCallManager::on_sync_group_call_participants(InputGroupCallId input_gr
   }
 }
 
-GroupCallParticipantOrder GroupCallManager::get_real_participant_order(
-    bool can_self_unmute, const GroupCallParticipant &participant, const GroupCallParticipants *participants) const {
+GroupCallParticipantOrder GroupCallManager::get_real_participant_order(bool can_self_unmute,
+                                                                       const GroupCallParticipant &participant,
+                                                                       const GroupCallParticipants *participants) {
   auto real_order = participant.get_real_order(can_self_unmute, participants->joined_date_asc, false);
   if (real_order >= participants->min_order) {
     return real_order;
@@ -2258,7 +2261,7 @@ std::pair<int32, int32> GroupCallManager::process_group_call_participant(InputGr
   }
   on_add_group_call_participant(input_group_call_id, participants->participants.back().dialog_id);
   on_participant_speaking_in_group_call(input_group_call_id, participants->participants.back());
-  return {diff, participant.video_diff};
+  return {diff, participants->participants.back().video_diff};
 }
 
 void GroupCallManager::on_add_group_call_participant(InputGroupCallId input_group_call_id,
@@ -2658,8 +2661,8 @@ void GroupCallManager::try_load_group_call_administrators(InputGroupCallId input
                      std::move(result));
       });
   td_->contacts_manager_->search_dialog_participants(
-      dialog_id, string(), 100, DialogParticipantsFilter(DialogParticipantsFilter::Type::Administrators),
-      std::move(promise));
+      dialog_id, string(), 100,
+      DialogParticipantsFilter(td_api::make_object<td_api::chatMembersFilterAdministrators>()), std::move(promise));
 }
 
 void GroupCallManager::finish_load_group_call_administrators(InputGroupCallId input_group_call_id,
@@ -2684,9 +2687,9 @@ void GroupCallManager::finish_load_group_call_administrators(InputGroupCallId in
   vector<DialogId> administrator_dialog_ids;
   auto participants = result.move_as_ok();
   for (auto &administrator : participants.participants_) {
-    if (administrator.status.can_manage_calls() &&
-        administrator.dialog_id != DialogId(td_->contacts_manager_->get_my_id())) {
-      administrator_dialog_ids.push_back(administrator.dialog_id);
+    if (administrator.status_.can_manage_calls() &&
+        administrator.dialog_id_ != DialogId(td_->contacts_manager_->get_my_id())) {
+      administrator_dialog_ids.push_back(administrator.dialog_id_);
     }
   }
 
@@ -4091,7 +4094,7 @@ InputGroupCallId GroupCallManager::update_group_call(const tl_object_ptr<telegra
       auto group_call = static_cast<const telegram_api::groupCall *>(group_call_ptr.get());
       input_group_call_id = InputGroupCallId(group_call->id_, group_call->access_hash_);
       call.is_active = true;
-      call.title = std::move(group_call->title_);
+      call.title = group_call->title_;
       call.start_subscribed = group_call->schedule_start_subscribed_;
       call.mute_new_participants = group_call->join_muted_;
       call.joined_date_asc = group_call->join_date_asc_;
@@ -4465,8 +4468,10 @@ void GroupCallManager::remove_recent_group_call_speaker(InputGroupCallId input_g
 void GroupCallManager::on_group_call_recent_speakers_updated(const GroupCall *group_call,
                                                              GroupCallRecentSpeakers *recent_speakers) {
   if (group_call == nullptr || !group_call->is_inited || recent_speakers->is_changed) {
-    LOG(INFO) << "Don't need to send update of recent speakers in " << group_call->group_call_id << " from "
-              << group_call->dialog_id;
+    if (group_call != nullptr) {
+      LOG(INFO) << "Don't need to send update of recent speakers in " << group_call->group_call_id << " from "
+                << group_call->dialog_id;
+    }
     return;
   }
 
@@ -4662,12 +4667,12 @@ vector<td_api::object_ptr<td_api::groupCallRecentSpeaker>> GroupCallManager::get
 }
 
 tl_object_ptr<td_api::groupCall> GroupCallManager::get_group_call_object(
-    const GroupCall *group_call, vector<td_api::object_ptr<td_api::groupCallRecentSpeaker>> recent_speakers) const {
+    const GroupCall *group_call, vector<td_api::object_ptr<td_api::groupCallRecentSpeaker>> recent_speakers) {
   CHECK(group_call != nullptr);
   CHECK(group_call->is_inited);
 
   int32 scheduled_start_date = group_call->scheduled_start_date;
-  bool is_active = scheduled_start_date == 0 ? group_call->is_active : 0;
+  bool is_active = scheduled_start_date == 0 ? group_call->is_active : false;
   bool is_joined = group_call->is_joined && !group_call->is_being_left;
   bool start_subscribed = get_group_call_start_subscribed(group_call);
   bool is_my_video_enabled = get_group_call_is_my_video_enabled(group_call);
@@ -4688,7 +4693,7 @@ tl_object_ptr<td_api::groupCall> GroupCallManager::get_group_call_object(
 }
 
 tl_object_ptr<td_api::updateGroupCall> GroupCallManager::get_update_group_call_object(
-    const GroupCall *group_call, vector<td_api::object_ptr<td_api::groupCallRecentSpeaker>> recent_speakers) const {
+    const GroupCall *group_call, vector<td_api::object_ptr<td_api::groupCallRecentSpeaker>> recent_speakers) {
   return td_api::make_object<td_api::updateGroupCall>(get_group_call_object(group_call, std::move(recent_speakers)));
 }
 

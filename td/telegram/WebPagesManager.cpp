@@ -6,8 +6,6 @@
 //
 #include "td/telegram/WebPagesManager.h"
 
-#include "td/telegram/secret_api.h"
-
 #include "td/telegram/AnimationsManager.h"
 #include "td/telegram/AudiosManager.h"
 #include "td/telegram/AuthManager.h"
@@ -23,6 +21,7 @@
 #include "td/telegram/MessageEntity.h"
 #include "td/telegram/MessagesManager.h"
 #include "td/telegram/Photo.h"
+#include "td/telegram/secret_api.h"
 #include "td/telegram/StickersManager.h"
 #include "td/telegram/Td.h"
 #include "td/telegram/TdDb.h"
@@ -1055,18 +1054,19 @@ void WebPagesManager::get_web_page_by_url(const string &url, Promise<WebPageId> 
   load_web_page_by_url(url, std::move(promise));
 }
 
-void WebPagesManager::load_web_page_by_url(const string &url, Promise<WebPageId> &&promise) {
+void WebPagesManager::load_web_page_by_url(string url, Promise<WebPageId> &&promise) {
   if (!G()->parameters().use_message_db) {
     return reload_web_page_by_url(url, std::move(promise));
   }
 
   LOG(INFO) << "Load \"" << url << '"';
-  G()->td_db()->get_sqlite_pmc()->get(
-      get_web_page_url_database_key(url),
-      PromiseCreator::lambda([actor_id = actor_id(this), url, promise = std::move(promise)](string value) mutable {
-        send_closure(actor_id, &WebPagesManager::on_load_web_page_id_by_url_from_database, std::move(url),
-                     std::move(value), std::move(promise));
-      }));
+  auto key = get_web_page_url_database_key(url);
+  G()->td_db()->get_sqlite_pmc()->get(key, PromiseCreator::lambda([actor_id = actor_id(this), url = std::move(url),
+                                                                   promise = std::move(promise)](string value) mutable {
+                                        send_closure(actor_id,
+                                                     &WebPagesManager::on_load_web_page_id_by_url_from_database,
+                                                     std::move(url), std::move(value), std::move(promise));
+                                      }));
 }
 
 void WebPagesManager::on_load_web_page_id_by_url_from_database(string url, string value, Promise<WebPageId> &&promise) {
@@ -1456,12 +1456,12 @@ void WebPagesManager::on_get_web_page_instant_view(WebPage *web_page, tl_object_
   web_page->instant_view.page_blocks =
       get_web_page_blocks(td_, std::move(page->blocks_), animations, audios, documents, photos, videos, voice_notes);
   web_page->instant_view.view_count = (page->flags_ & telegram_api::page::VIEWS_MASK) != 0 ? page->views_ : 0;
-  web_page->instant_view.is_v2 = (page->flags_ & telegram_api::page::V2_MASK) != 0;
-  web_page->instant_view.is_rtl = (page->flags_ & telegram_api::page::RTL_MASK) != 0;
+  web_page->instant_view.is_v2 = page->v2_;
+  web_page->instant_view.is_rtl = page->rtl_;
   web_page->instant_view.hash = hash;
   web_page->instant_view.url = std::move(page->url_);
   web_page->instant_view.is_empty = false;
-  web_page->instant_view.is_full = (page->flags_ & telegram_api::page::PART_MASK) == 0;
+  web_page->instant_view.is_full = !page->part_;
   web_page->instant_view.is_loaded = true;
 
   LOG(DEBUG) << "Receive web page instant view: "
