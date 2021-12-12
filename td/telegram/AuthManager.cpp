@@ -56,12 +56,13 @@ AuthManager::AuthManager(int32 api_id, const string &api_hash, ActorShared<> par
     } else {
       LOG(ERROR) << "Restore unknown my_id";
       ContactsManager::send_get_me_query(
-          td, PromiseCreator::lambda([this](Result<Unit> result) { update_state(State::Ok); }));
+          td_, PromiseCreator::lambda([this](Result<Unit> result) { update_state(State::Ok); }));
     }
   } else if (auth_str == "logout") {
     LOG(WARNING) << "Continue to log out";
     update_state(State::LoggingOut);
   } else if (auth_str == "destroy") {
+    LOG(WARNING) << "Continue to destroy auth keys";
     update_state(State::DestroyingKeys);
   } else {
     if (!load_state()) {
@@ -74,7 +75,8 @@ void AuthManager::start_up() {
   if (state_ == State::LoggingOut) {
     send_log_out_query();
   } else if (state_ == State::DestroyingKeys) {
-    destroy_auth_keys();
+    G()->net_query_dispatcher().destroy_auth_keys(
+        PromiseCreator::lambda([](Unit) { send_closure_later(G()->td(), &Td::destroy); }, PromiseCreator::Ignore()));
   }
 }
 void AuthManager::tear_down() {
@@ -208,11 +210,14 @@ void AuthManager::set_login_token_expires_at(double login_token_expires_at) {
   login_token_expires_at_ = login_token_expires_at;
   poll_export_login_code_timeout_.cancel_timeout();
   poll_export_login_code_timeout_.set_callback(std::move(on_update_login_token_static));
-  poll_export_login_code_timeout_.set_callback_data(static_cast<void *>(td));
+  poll_export_login_code_timeout_.set_callback_data(static_cast<void *>(td_));
   poll_export_login_code_timeout_.set_timeout_at(login_token_expires_at_);
 }
 
 void AuthManager::on_update_login_token_static(void *td) {
+  if (G()->close_flag()) {
+    return;
+  }
   static_cast<Td *>(td)->auth_manager_->on_update_login_token();
 }
 
@@ -667,8 +672,10 @@ void AuthManager::on_log_out_result(NetQueryPtr &result) {
   if (result->is_ok()) {
     auto r_log_out = fetch_result<telegram_api::auth_logOut>(result->ok());
     if (r_log_out.is_ok()) {
-      if (!r_log_out.ok()) {
-        status = Status::Error(500, "auth.logOut returned false!");
+      auto logged_out = r_log_out.move_as_ok();
+      if (!logged_out->future_auth_token_.empty()) {
+        G()->shared_config().set_option_string("authentication_token",
+                                               base64url_encode(logged_out->future_auth_token_.as_slice()));
       }
     } else {
       status = r_log_out.move_as_error();
@@ -763,9 +770,9 @@ void AuthManager::on_get_authorization(tl_object_ptr<telegram_api::auth_Authoriz
   new_password_.clear();
   new_hint_.clear();
   state_ = State::Ok;
-  td->contacts_manager_->on_get_user(std::move(auth->user_), "on_get_authorization", true);
+  td_->contacts_manager_->on_get_user(std::move(auth->user_), "on_get_authorization", true);
   update_state(State::Ok, true);
-  if (!td->contacts_manager_->get_my_id().is_valid()) {
+  if (!td_->contacts_manager_->get_my_id().is_valid()) {
     LOG(ERROR) << "Server doesn't send proper authorization";
     if (query_id_ != 0) {
       on_query_error(Status::Error(500, "Server doesn't send proper authorization"));
@@ -776,19 +783,22 @@ void AuthManager::on_get_authorization(tl_object_ptr<telegram_api::auth_Authoriz
   if ((auth->flags_ & telegram_api::auth_authorization::TMP_SESSIONS_MASK) != 0) {
     G()->shared_config().set_option_integer("session_count", auth->tmp_sessions_);
   }
-  td->messages_manager_->on_authorization_success();
-  td->notification_manager_->init();
-  td->stickers_manager_->init();
-  td->theme_manager_->init();
-  td->top_dialog_manager_->init();
-  td->updates_manager_->get_difference("on_get_authorization");
-  td->on_online_updated(false, true);
+  if (auth->setup_password_required_ && auth->otherwise_relogin_days_ > 0) {
+    G()->shared_config().set_option_integer("otherwise_relogin_days", auth->otherwise_relogin_days_);
+  }
+  td_->messages_manager_->on_authorization_success();
+  td_->notification_manager_->init();
+  td_->stickers_manager_->init();
+  td_->theme_manager_->init();
+  td_->top_dialog_manager_->init();
+  td_->updates_manager_->get_difference("on_get_authorization");
+  td_->on_online_updated(false, true);
   if (!is_bot()) {
-    td->schedule_get_terms_of_service(0);
-    td->schedule_get_promo_data(0);
+    td_->schedule_get_terms_of_service(0);
+    td_->schedule_get_promo_data(0);
     G()->td_db()->get_binlog_pmc()->set("fetched_marks_as_unread", "1");
   } else {
-    td->set_is_bot_online(true);
+    td_->set_is_bot_online(true);
   }
   send_closure(G()->config_manager(), &ConfigManager::request_config);
   if (query_id_ != 0) {
@@ -808,7 +818,8 @@ void AuthManager::on_result(NetQueryPtr result) {
     type = net_query_type_;
     net_query_type_ = NetQueryType::None;
     if (result->is_error()) {
-      if ((type == NetQueryType::SignIn || type == NetQueryType::RequestQrCode || type == NetQueryType::ImportQrCode) &&
+      if ((type == NetQueryType::SendCode || type == NetQueryType::SignIn || type == NetQueryType::RequestQrCode ||
+           type == NetQueryType::ImportQrCode) &&
           result->error().code() == 401 && result->error().message() == CSlice("SESSION_PASSWORD_NEEDED")) {
         auto dc_id = DcId::main();
         if (type == NetQueryType::ImportQrCode) {

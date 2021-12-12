@@ -62,7 +62,7 @@ class ConcurrentScheduler final : private Scheduler::Callback {
   void finish();
 
   template <class ActorT, class... Args>
-  ActorOwn<ActorT> create_actor_unsafe(int32 sched_id, Slice name, Args &&... args) {
+  ActorOwn<ActorT> create_actor_unsafe(int32 sched_id, Slice name, Args &&...args) {
 #if TD_THREAD_UNSUPPORTED || TD_EVENTFD_UNSUPPORTED
     sched_id = 0;
 #endif
@@ -95,7 +95,7 @@ class ConcurrentScheduler final : private Scheduler::Callback {
   unique_ptr<detail::Iocp> iocp_;
   td::thread iocp_thread_;
 #endif
-  int32 extra_scheduler_;
+  int32 extra_scheduler_ = 0;
 
   void on_finish() final;
 

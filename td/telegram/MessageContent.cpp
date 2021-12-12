@@ -39,7 +39,7 @@
 #include "td/telegram/MessageEntity.hpp"
 #include "td/telegram/MessageId.h"
 #include "td/telegram/MessageSearchFilter.h"
-#include "td/telegram/MessagesManager.h"
+#include "td/telegram/MessageSender.h"
 #include "td/telegram/misc.h"
 #include "td/telegram/net/DcId.h"
 #include "td/telegram/Payments.h"
@@ -1727,7 +1727,7 @@ static Result<InputMessageContent> create_input_message_content(
       int32 type = 'i';
       if (file_view.has_remote_location() && !file_view.remote_location().is_web()) {
         auto photo_size_source = file_view.remote_location().get_source();
-        if (photo_size_source.get_type() == PhotoSizeSource::Type::Thumbnail) {
+        if (photo_size_source.get_type("create_input_message_content") == PhotoSizeSource::Type::Thumbnail) {
           auto old_type = photo_size_source.thumbnail().thumbnail_type;
           if (old_type != 't') {
             type = old_type;
@@ -2848,6 +2848,15 @@ int32 get_message_content_live_location_period(const MessageContent *content) {
   }
 }
 
+bool get_message_content_poll_is_anonymous(const Td *td, const MessageContent *content) {
+  switch (content->get_type()) {
+    case MessageContentType::Poll:
+      return td->poll_manager_->get_poll_is_anonymous(static_cast<const MessagePoll *>(content)->poll_id);
+    default:
+      return false;
+  }
+}
+
 bool get_message_content_poll_is_closed(const Td *td, const MessageContent *content) {
   switch (content->get_type()) {
     case MessageContentType::Poll:
@@ -2986,7 +2995,7 @@ void merge_message_contents(Td *td, const MessageContent *old_content, MessageCo
         if (need_message_changed_warning && need_message_text_changed_warning(old_, new_) &&
             old_->text.entities.size() <= MAX_CUSTOM_ENTITIES_COUNT &&
             need_message_entities_changed_warning(old_->text.entities, new_->text.entities)) {
-          LOG(WARNING) << "Entities has changed in " << get_content_object(old_content) << ". New content is "
+          LOG(WARNING) << "Entities have changed in " << get_content_object(old_content) << ". New content is "
                        << get_content_object(new_content);
         }
         need_update = true;
@@ -4101,7 +4110,8 @@ unique_ptr<MessageContent> get_message_content(Td *td, FormattedText message,
                                                tl_object_ptr<telegram_api::MessageMedia> &&media,
                                                DialogId owner_dialog_id, bool is_content_read, UserId via_bot_user_id,
                                                int32 *ttl, bool *disable_web_page_preview) {
-  if (!td->auth_manager_->was_authorized() && !G()->close_flag() && media != nullptr) {
+  if (!td->auth_manager_->was_authorized() && !G()->close_flag() && media != nullptr &&
+      media->get_id() != telegram_api::messageMediaEmpty::ID) {
     LOG(ERROR) << "Receive without authorization " << to_string(media);
     media = nullptr;
   }
@@ -4994,9 +5004,8 @@ tl_object_ptr<td_api::MessageContent> get_message_content_object(const MessageCo
     case MessageContentType::ProximityAlertTriggered: {
       const auto *m = static_cast<const MessageProximityAlertTriggered *>(content);
       return make_tl_object<td_api::messageProximityAlertTriggered>(
-          td->messages_manager_->get_message_sender_object(m->traveler_dialog_id, "messageProximityAlertTriggered 1"),
-          td->messages_manager_->get_message_sender_object(m->watcher_dialog_id, "messageProximityAlertTriggered 2"),
-          m->distance);
+          get_message_sender_object(td, m->traveler_dialog_id, "messageProximityAlertTriggered 1"),
+          get_message_sender_object(td, m->watcher_dialog_id, "messageProximityAlertTriggered 2"), m->distance);
     }
     case MessageContentType::GroupCall: {
       const auto *m = static_cast<const MessageGroupCall *>(content);
@@ -5626,10 +5635,6 @@ void on_sent_message_content(Td *td, const MessageContent *content) {
       // nothing to do
       return;
   }
-}
-
-StickerSetId add_sticker_set(Td *td, tl_object_ptr<telegram_api::InputStickerSet> &&input_sticker_set) {
-  return td->stickers_manager_->add_sticker_set(std::move(input_sticker_set));
 }
 
 bool is_unsent_animated_emoji_click(Td *td, DialogId dialog_id, const DialogAction &action) {

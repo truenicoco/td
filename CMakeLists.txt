@@ -6,7 +6,7 @@ if (POLICY CMP0065)
   cmake_policy(SET CMP0065 NEW)
 endif()
 
-project(TDLib VERSION 1.7.9 LANGUAGES CXX C)
+project(TDLib VERSION 1.7.10 LANGUAGES CXX C)
 
 if (NOT DEFINED CMAKE_MODULE_PATH)
   set(CMAKE_MODULE_PATH "")
@@ -276,6 +276,7 @@ set(TDLIB_SOURCE
   td/mtproto/Transport.cpp
   td/mtproto/utils.cpp
 
+  td/telegram/Account.cpp
   td/telegram/AnimationsManager.cpp
   td/telegram/AudiosManager.cpp
   td/telegram/AuthManager.cpp
@@ -300,8 +301,10 @@ set(TDLIB_SOURCE
   td/telegram/DeviceTokenManager.cpp
   td/telegram/DhCache.cpp
   td/telegram/DialogAction.cpp
+  td/telegram/DialogActionBar.cpp
   td/telegram/DialogAdministrator.cpp
   td/telegram/DialogDb.cpp
+  td/telegram/DialogEventLog.cpp
   td/telegram/DialogFilter.cpp
   td/telegram/DialogId.cpp
   td/telegram/DialogInviteLink.cpp
@@ -356,6 +359,7 @@ set(TDLIB_SOURCE
   td/telegram/MessageReplyInfo.cpp
   td/telegram/MessagesDb.cpp
   td/telegram/MessageSearchFilter.cpp
+  td/telegram/MessageSender.cpp
   td/telegram/MessagesManager.cpp
   td/telegram/MessageTtlSetting.cpp
   td/telegram/misc.cpp
@@ -451,6 +455,8 @@ set(TDLIB_SOURCE
   td/mtproto/utils.h
 
   td/telegram/AccessRights.h
+  td/telegram/Account.h
+  td/telegram/AffectedHistory.h
   td/telegram/AnimationsManager.h
   td/telegram/AudiosManager.h
   td/telegram/AuthManager.h
@@ -480,9 +486,11 @@ set(TDLIB_SOURCE
   td/telegram/DhCache.h
   td/telegram/DhConfig.h
   td/telegram/DialogAction.h
+  td/telegram/DialogActionBar.h
   td/telegram/DialogAdministrator.h
   td/telegram/DialogDate.h
   td/telegram/DialogDb.h
+  td/telegram/DialogEventLog.h
   td/telegram/DialogFilter.h
   td/telegram/DialogFilterId.h
   td/telegram/DialogId.h
@@ -555,6 +563,7 @@ set(TDLIB_SOURCE
   td/telegram/MessageThreadInfo.h
   td/telegram/MessagesDb.h
   td/telegram/MessageSearchFilter.h
+  td/telegram/MessageSender.h
   td/telegram/MessagesManager.h
   td/telegram/MessageTtlSetting.h
   td/telegram/misc.h

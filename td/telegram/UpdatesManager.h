@@ -174,7 +174,7 @@ class UpdatesManager final : public Actor {
 
   class PendingQtsUpdate {
    public:
-    double receive_time;
+    double receive_time = 0.0;
     tl_object_ptr<telegram_api::Update> update;
     vector<Promise<Unit>> promises;
   };
@@ -355,6 +355,8 @@ class UpdatesManager final : public Actor {
   bool is_acceptable_peer(const tl_object_ptr<telegram_api::Peer> &peer) const;
 
   bool is_acceptable_message_entities(const vector<tl_object_ptr<telegram_api::MessageEntity>> &message_entities) const;
+
+  bool is_acceptable_reply_markup(const tl_object_ptr<telegram_api::ReplyMarkup> &reply_markup) const;
 
   bool is_acceptable_message_reply_header(
       const telegram_api::object_ptr<telegram_api::messageReplyHeader> &header) const;

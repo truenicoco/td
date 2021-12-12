@@ -125,7 +125,12 @@ class Td final : public Actor {
   void set_is_bot_online(bool is_bot_online);
 
   template <class ActorT, class... ArgsT>
-  ActorId<ActorT> create_net_actor(ArgsT &&... args) {
+  ActorId<ActorT> create_net_actor(ArgsT &&...args) {
+    LOG_CHECK(close_flag_ < 1) << close_flag_
+#if TD_CLANG || TD_GCC
+                               << ' ' << __PRETTY_FUNCTION__
+#endif
+        ;
     auto slot_id = request_actors_.create(ActorOwn<>(), RequestActorIdType);
     inc_request_actor_refcnt();
     auto actor = make_unique<ActorT>(std::forward<ArgsT>(args)...);
@@ -208,11 +213,11 @@ class Td final : public Actor {
     ResultHandler &operator=(const ResultHandler &) = delete;
     virtual ~ResultHandler() = default;
 
-    virtual void on_result(NetQueryPtr query);
-    virtual void on_result(uint64 id, BufferSlice packet) {
+    virtual void on_result(BufferSlice packet) {
       UNREACHABLE();
     }
-    virtual void on_error(uint64 id, Status status) {
+
+    virtual void on_error(Status status) {
       UNREACHABLE();
     }
 
@@ -221,14 +226,15 @@ class Td final : public Actor {
    protected:
     void send_query(NetQueryPtr query);
 
-    Td *td = nullptr;
+    Td *td_ = nullptr;
+    bool is_query_sent_ = false;
 
    private:
-    void set_td(Td *new_td);
+    void set_td(Td *td);
   };
 
   template <class HandlerT, class... Args>
-  std::shared_ptr<HandlerT> create_handler(Args &&... args) {
+  std::shared_ptr<HandlerT> create_handler(Args &&...args) {
     LOG_CHECK(close_flag_ < 2) << close_flag_
 #if TD_CLANG || TD_GCC
                                << ' ' << __PRETTY_FUNCTION__
@@ -244,7 +250,7 @@ class Td final : public Actor {
   static td_api::object_ptr<td_api::Object> static_request(td_api::object_ptr<td_api::Function> function);
 
  private:
-  static constexpr const char *TDLIB_VERSION = "1.7.9";
+  static constexpr const char *TDLIB_VERSION = "1.7.10";
   static constexpr int64 ONLINE_ALARM_ID = 0;
   static constexpr int64 PING_SERVER_ALARM_ID = -1;
   static constexpr int32 PING_SERVER_TIMEOUT = 300;
@@ -345,8 +351,6 @@ class Td final : public Actor {
   static bool is_internal_config_option(Slice name);
 
   void on_config_option_updated(const string &name);
-
-  static void send(NetQueryPtr &&query);
 
   class OnRequest;
 
@@ -475,6 +479,12 @@ class Td final : public Actor {
   void on_request(uint64 id, const td_api::terminateSession &request);
 
   void on_request(uint64 id, const td_api::terminateAllOtherSessions &request);
+
+  void on_request(uint64 id, const td_api::toggleSessionCanAcceptCalls &request);
+
+  void on_request(uint64 id, const td_api::toggleSessionCanAcceptSecretChats &request);
+
+  void on_request(uint64 id, const td_api::setInactiveSessionTtl &request);
 
   void on_request(uint64 id, const td_api::getConnectedWebsites &request);
 
@@ -644,11 +654,15 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::deleteMessages &request);
 
-  void on_request(uint64 id, const td_api::deleteChatMessagesFromUser &request);
+  void on_request(uint64 id, const td_api::deleteChatMessagesBySender &request);
 
   void on_request(uint64 id, const td_api::deleteChatMessagesByDate &request);
 
   void on_request(uint64 id, const td_api::readAllChatMentions &request);
+
+  void on_request(uint64 id, const td_api::getChatAvailableMessageSenders &request);
+
+  void on_request(uint64 id, const td_api::setChatDefaultMessageSender &request);
 
   void on_request(uint64 id, td_api::sendMessage &request);
 
@@ -814,6 +828,8 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::setChatDraftMessage &request);
 
+  void on_request(uint64 id, const td_api::toggleChatHasProtectedContent &request);
+
   void on_request(uint64 id, const td_api::toggleChatIsPinned &request);
 
   void on_request(uint64 id, const td_api::toggleChatIsMarkedAsUnread &request);
@@ -848,7 +864,7 @@ class Td final : public Actor {
 
   void on_request(uint64 id, const td_api::addChatMembers &request);
 
-  void on_request(uint64 id, td_api::setChatMemberStatus &request);
+  void on_request(uint64 id, const td_api::setChatMemberStatus &request);
 
   void on_request(uint64 id, const td_api::banChatMember &request);
 
@@ -856,11 +872,11 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::transferChatOwnership &request);
 
-  void on_request(uint64 id, td_api::getChatMember &request);
+  void on_request(uint64 id, const td_api::getChatMember &request);
 
   void on_request(uint64 id, td_api::searchChatMembers &request);
 
-  void on_request(uint64 id, td_api::getChatAdministrators &request);
+  void on_request(uint64 id, const td_api::getChatAdministrators &request);
 
   void on_request(uint64 id, const td_api::replacePrimaryChatInviteLink &request);
 
@@ -878,9 +894,9 @@ class Td final : public Actor {
 
   void on_request(uint64 id, td_api::getChatJoinRequests &request);
 
-  void on_request(uint64 id, const td_api::approveChatJoinRequest &request);
+  void on_request(uint64 id, const td_api::processChatJoinRequest &request);
 
-  void on_request(uint64 id, const td_api::declineChatJoinRequest &request);
+  void on_request(uint64 id, td_api::processChatJoinRequests &request);
 
   void on_request(uint64 id, td_api::revokeChatInviteLink &request);
 
@@ -1305,7 +1321,7 @@ class Td final : public Actor {
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getFileExtension &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::cleanFileName &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getLanguagePackString &request);
-  static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getPhoneNumberInfoSync &request);
+  static td_api::object_ptr<td_api::Object> do_static_request(td_api::getPhoneNumberInfoSync &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getPushReceiverId &request);
   static td_api::object_ptr<td_api::Object> do_static_request(const td_api::getChatFilterDefaultIconName &request);
   static td_api::object_ptr<td_api::Object> do_static_request(td_api::getJsonValue &request);

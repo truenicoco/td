@@ -363,7 +363,7 @@ class Status {
   }
 
   Status clone_static() const TD_WARN_UNUSED_RESULT {
-    CHECK(is_ok() || get_info().static_flag);
+    CHECK(ptr_ != nullptr && get_info().static_flag);
     Status result;
     result.ptr_ = std::unique_ptr<char[], Deleter>(ptr_.get());
     return result;
@@ -416,7 +416,7 @@ class Result {
   }
   struct emplace_t {};
   template <class... ArgsT>
-  Result(emplace_t, ArgsT &&... args) : status_(), value_(std::forward<ArgsT>(args)...) {
+  Result(emplace_t, ArgsT &&...args) : status_(), value_(std::forward<ArgsT>(args)...) {
   }
   Result(Status &&status) : status_(std::move(status)) {
     CHECK(status_.is_error());
@@ -451,7 +451,7 @@ class Result {
     return *this;
   }
   template <class... ArgsT>
-  void emplace(ArgsT &&... args) {
+  void emplace(ArgsT &&...args) {
     if (status_.is_ok()) {
       value_.~T();
     }

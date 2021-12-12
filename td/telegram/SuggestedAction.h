@@ -9,6 +9,8 @@
 #include "td/telegram/DialogId.h"
 #include "td/telegram/td_api.h"
 
+#include "td/actor/PromiseFuture.h"
+
 #include "td/utils/common.h"
 #include "td/utils/Slice.h"
 
@@ -21,16 +23,19 @@ struct SuggestedAction {
     CheckPhoneNumber,
     SeeTicksHint,
     ConvertToGigagroup,
-    CheckPassword
+    CheckPassword,
+    SetPassword
   };
   Type type_ = Type::Empty;
   DialogId dialog_id_;
+  int32 otherwise_relogin_days_ = 0;
 
   void init(Type type);
 
   SuggestedAction() = default;
 
-  explicit SuggestedAction(Type type, DialogId dialog_id = DialogId()) : type_(type), dialog_id_(dialog_id) {
+  explicit SuggestedAction(Type type, DialogId dialog_id = DialogId(), int32 otherwise_relogin_days = 0)
+      : type_(type), dialog_id_(dialog_id), otherwise_relogin_days_(otherwise_relogin_days) {
   }
 
   explicit SuggestedAction(Slice action_str);
@@ -69,5 +74,7 @@ void update_suggested_actions(vector<SuggestedAction> &suggested_actions,
                               vector<SuggestedAction> &&new_suggested_actions);
 
 void remove_suggested_action(vector<SuggestedAction> &suggested_actions, SuggestedAction suggested_action);
+
+void dismiss_suggested_action(SuggestedAction action, Promise<Unit> &&promise);
 
 }  // namespace td
