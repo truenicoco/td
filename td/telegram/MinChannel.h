@@ -6,17 +6,16 @@
 //
 #pragma once
 
-#include "td/telegram/DialogId.h"
-#include "td/telegram/MessageId.h"
+#include "td/telegram/Photo.h"
 
 #include "td/utils/common.h"
 
 namespace td {
 
-struct MessageThreadInfo {
-  DialogId dialog_id;
-  vector<MessageId> message_ids;
-  int32 unread_message_count = 0;
+struct MinChannel {
+  string title_;
+  DialogPhoto photo_;
+  bool is_megagroup_ = false;
 };
 
 }  // namespace td

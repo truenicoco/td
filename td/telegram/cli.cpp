@@ -54,7 +54,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <clocale>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -1002,8 +1001,6 @@ class CliClient final : public Actor {
       bad_parameters->api_id_ = api_id_;
       bad_parameters->api_hash_ = api_hash_;
       send_request(td_api::make_object<td_api::setTdlibParameters>(std::move(bad_parameters)));
-
-      send_closure_later(actor_id(this), &CliClient::create_td, Slice("ClientActor3"));
     }
   }
 
@@ -1395,8 +1392,8 @@ class CliClient final : public Actor {
     if (action == "number") {
       return td_api::make_object<td_api::suggestedActionCheckPhoneNumber>();
     }
-    if (action == "ticks") {
-      return td_api::make_object<td_api::suggestedActionSeeTicksHint>();
+    if (action == "checks") {
+      return td_api::make_object<td_api::suggestedActionViewChecksHint>();
     }
     if (begins_with(action, "giga")) {
       return td_api::make_object<td_api::suggestedActionConvertToBroadcastGroup>(as_supergroup_id(action.substr(4)));
@@ -2673,7 +2670,7 @@ class CliClient final : public Actor {
       get_args(args, chat_id, message_ids);
       send_request(td_api::make_object<td_api::getMessages>(as_chat_id(chat_id), as_message_ids(message_ids)));
     } else if (op == "gsm") {
-      send_request(td_api::make_object<td_api::getChatSponsoredMessages>(as_chat_id(args)));
+      send_request(td_api::make_object<td_api::getChatSponsoredMessage>(as_chat_id(args)));
     } else if (op == "vsm") {
       string chat_id;
       string sponsored_message_id;
@@ -2987,30 +2984,30 @@ class CliClient final : public Actor {
           td_api::make_object<td_api::loadGroupCallParticipants>(as_group_call_id(group_call_id), as_limit(limit)));
     } else if (op == "lgc") {
       send_request(td_api::make_object<td_api::leaveGroupCall>(as_group_call_id(args)));
-    } else if (op == "dgc") {
-      send_request(td_api::make_object<td_api::discardGroupCall>(as_group_call_id(args)));
+    } else if (op == "egc") {
+      send_request(td_api::make_object<td_api::endGroupCall>(as_group_call_id(args)));
     } else if (op == "rpcil") {
       const string &chat_id = args;
       send_request(td_api::make_object<td_api::replacePrimaryChatInviteLink>(as_chat_id(chat_id)));
     } else if (op == "ccilt") {
       string chat_id;
       string name;
-      int32 expire_date;
+      int32 expiration_date;
       int32 member_limit;
       bool creates_join_request;
-      get_args(args, chat_id, name, expire_date, member_limit, creates_join_request);
-      send_request(td_api::make_object<td_api::createChatInviteLink>(as_chat_id(chat_id), name, expire_date,
+      get_args(args, chat_id, name, expiration_date, member_limit, creates_join_request);
+      send_request(td_api::make_object<td_api::createChatInviteLink>(as_chat_id(chat_id), name, expiration_date,
                                                                      member_limit, creates_join_request));
     } else if (op == "ecil") {
       string chat_id;
       string invite_link;
       string name;
-      int32 expire_date;
+      int32 expiration_date;
       int32 member_limit;
       bool creates_join_request;
-      get_args(args, chat_id, invite_link, name, expire_date, member_limit, creates_join_request);
-      send_request(td_api::make_object<td_api::editChatInviteLink>(as_chat_id(chat_id), invite_link, name, expire_date,
-                                                                   member_limit, creates_join_request));
+      get_args(args, chat_id, invite_link, name, expiration_date, member_limit, creates_join_request);
+      send_request(td_api::make_object<td_api::editChatInviteLink>(
+          as_chat_id(chat_id), invite_link, name, expiration_date, member_limit, creates_join_request));
     } else if (op == "rcil") {
       string chat_id;
       string invite_link;
@@ -3263,12 +3260,12 @@ class CliClient final : public Actor {
       message_thread_id_ = std::move(args);
     } else if (op == "gcams") {
       send_request(td_api::make_object<td_api::getChatAvailableMessageSenders>(as_chat_id(args)));
-    } else if (op == "scdms") {
+    } else if (op == "scmsr") {
       string chat_id;
       string sender_id;
       get_args(args, chat_id, sender_id);
       send_request(
-          td_api::make_object<td_api::setChatDefaultMessageSender>(as_chat_id(chat_id), as_message_sender(sender_id)));
+          td_api::make_object<td_api::setChatMessageSender>(as_chat_id(chat_id), as_message_sender(sender_id)));
     } else if (op == "sm" || op == "sms" || op == "smr" || op == "smf") {
       string chat_id;
       string reply_to_message_id;
@@ -3907,11 +3904,11 @@ class CliClient final : public Actor {
       send_request(td_api::make_object<td_api::setChatPhoto>(
           as_chat_id(chat_id), td_api::make_object<td_api::inputChatPhotoAnimation>(as_input_file(animation),
                                                                                     to_double(main_frame_timestamp))));
-    } else if (op == "scmts") {
+    } else if (op == "scmt") {
       string chat_id;
       int32 ttl;
       get_args(args, chat_id, ttl);
-      send_request(td_api::make_object<td_api::setChatMessageTtlSetting>(as_chat_id(chat_id), ttl));
+      send_request(td_api::make_object<td_api::setChatMessageTtl>(as_chat_id(chat_id), ttl));
     } else if (op == "scperm") {
       string chat_id;
       string permissions;
@@ -4057,9 +4054,10 @@ class CliClient final : public Actor {
     } else if (op == "log") {
       string chat_id;
       string limit;
-      get_args(args, chat_id, limit);
+      string user_ids;
+      get_args(args, chat_id, limit, user_ids);
       send_request(td_api::make_object<td_api::getChatEventLog>(as_chat_id(chat_id), "", 0, as_limit(limit), nullptr,
-                                                                vector<int64>()));
+                                                                as_user_ids(user_ids)));
     } else if (op == "join") {
       send_request(td_api::make_object<td_api::joinChat>(as_chat_id(args)));
     } else if (op == "leave") {
@@ -4543,7 +4541,6 @@ class CliClient final : public Actor {
       rl_callback_handler_remove();
 #endif
       Scheduler::instance()->finish();
-      LOG(WARNING) << "STOP";
       stop();
     }
   }
@@ -4671,8 +4668,7 @@ void main(int argc, char **argv) {
   ClientManager::set_log_message_callback(0, on_log_message);
   init_openssl_threads();
 
-  const char *locale_name = (std::setlocale(LC_ALL, "fr-FR") == nullptr ? "C" : "fr-FR");
-  std::locale new_locale(locale_name);
+  std::locale new_locale("C");
   std::locale::global(new_locale);
   SCOPE_EXIT {
     std::locale::global(std::locale::classic());

@@ -158,7 +158,7 @@ function split_file($file, $chunks, $undo) {
     }
 
     if (count($functions) < $chunks) {
-        fwrite(STDERR, "ERROR: file is too small to be splitted more".PHP_EOL);
+        fwrite(STDERR, "ERROR: file is too small to be split more".PHP_EOL);
         return;
     }
 
@@ -297,6 +297,7 @@ function split_file($file, $chunks, $undo) {
                 'MessageCopyOptions' => 'MessageCopyOptions',
                 'messages_manager[_(-][^.]|MessagesManager' => 'MessagesManager',
                 'notification_manager[_(-][^.]|NotificationManager|notifications[)]' => 'NotificationManager',
+                'option_manager[_(-][^.]|OptionManager' => "OptionManager",
                 'phone_number_manager[_(-][^.]|PhoneNumberManager' => "PhoneNumberManager",
                 'poll_manager[_(-][^.]|PollManager' => "PollManager",
                 'PublicDialogType|get_public_dialog_type' => 'PublicDialogType',
