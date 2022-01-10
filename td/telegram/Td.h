@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2021
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -98,7 +98,7 @@ class Td final : public Actor {
   Td &operator=(Td &&) = delete;
   ~Td() final;
 
-  static constexpr const char *TDLIB_VERSION = "1.7.11";
+  static constexpr const char *TDLIB_VERSION = "1.8.0";
 
   struct Options {
     std::shared_ptr<NetQueryStats> net_query_stats;
@@ -526,8 +526,6 @@ class Td final : public Actor {
   void on_request(uint64 id, const td_api::getMessages &request);
 
   void on_request(uint64 id, const td_api::getChatSponsoredMessage &request);
-
-  void on_request(uint64 id, const td_api::viewSponsoredMessage &request);
 
   void on_request(uint64 id, const td_api::getMessageLink &request);
 
