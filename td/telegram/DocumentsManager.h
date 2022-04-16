@@ -10,7 +10,8 @@
 #include "td/telegram/Document.h"
 #include "td/telegram/EncryptedFile.h"
 #include "td/telegram/files/FileId.h"
-#include "td/telegram/Photo.h"
+#include "td/telegram/PhotoFormat.h"
+#include "td/telegram/PhotoSize.h"
 #include "td/telegram/secret_api.h"
 #include "td/telegram/SecretInputMedia.h"
 #include "td/telegram/td_api.h"
@@ -18,8 +19,8 @@
 
 #include "td/utils/buffer.h"
 #include "td/utils/common.h"
+#include "td/utils/FlatHashMap.h"
 
-#include <unordered_map>
 #include <utility>
 
 namespace td {
@@ -79,7 +80,7 @@ class DocumentsManager {
   Document on_get_document(RemoteDocument remote_document, DialogId owner_dialog_id,
                            MultiPromiseActor *load_data_multipromise_ptr = nullptr,
                            Document::Type default_document_type = Document::Type::General, bool is_background = false,
-                           bool is_pattern = false);
+                           bool is_pattern = false, bool is_ringtone = false);
 
   void create_document(FileId file_id, string minithumbnail, PhotoSize thumbnail, string file_name, string mime_type,
                        bool replace);
@@ -125,7 +126,7 @@ class DocumentsManager {
   FileId on_get_document(unique_ptr<GeneralDocument> new_document, bool replace);
 
   Td *td_;
-  std::unordered_map<FileId, unique_ptr<GeneralDocument>, FileIdHash> documents_;  // file_id -> GeneralDocument
+  FlatHashMap<FileId, unique_ptr<GeneralDocument>, FileIdHash> documents_;  // file_id -> GeneralDocument
 };
 
 }  // namespace td

@@ -9,6 +9,7 @@
 #include "td/telegram/ChannelId.h"
 #include "td/telegram/ChatId.h"
 #include "td/telegram/DialogId.h"
+#include "td/telegram/FullMessageId.h"
 #include "td/telegram/InputGroupCallId.h"
 #include "td/telegram/MessageId.h"
 #include "td/telegram/PtsManager.h"
@@ -20,13 +21,13 @@
 #include "td/actor/Timeout.h"
 
 #include "td/utils/common.h"
+#include "td/utils/FlatHashSet.h"
 #include "td/utils/logging.h"
 #include "td/utils/Status.h"
 #include "td/utils/tl_storers.h"
 #include "td/utils/TlStorerToString.h"
 
 #include <map>
-#include <unordered_set>
 
 namespace td {
 
@@ -98,7 +99,7 @@ class UpdatesManager final : public Actor {
   void add_pending_pts_update(tl_object_ptr<telegram_api::Update> &&update, int32 new_pts, int32 pts_count,
                               double receive_time, Promise<Unit> &&promise, const char *source);
 
-  static std::unordered_set<int64> get_sent_messages_random_ids(const telegram_api::Updates *updates_ptr);
+  static FlatHashSet<int64> get_sent_messages_random_ids(const telegram_api::Updates *updates_ptr);
 
   static vector<const tl_object_ptr<telegram_api::Message> *> get_new_messages(
       const telegram_api::Updates *updates_ptr);
@@ -111,7 +112,7 @@ class UpdatesManager final : public Actor {
 
   static vector<DialogId> get_chat_dialog_ids(const telegram_api::Updates *updates_ptr);
 
-  static int32 get_update_edit_message_pts(const telegram_api::Updates *updates_ptr);
+  static int32 get_update_edit_message_pts(const telegram_api::Updates *updates_ptr, FullMessageId full_message_id);
 
   void get_difference(const char *source);
 
@@ -386,6 +387,9 @@ class UpdatesManager final : public Actor {
 
   void on_update(tl_object_ptr<telegram_api::updateMessageReactions> update, Promise<Unit> &&promise);
 
+  void on_update(tl_object_ptr<telegram_api::updateAttachMenuBots> update, Promise<Unit> &&promise);
+  void on_update(tl_object_ptr<telegram_api::updateWebViewResultSent> update, Promise<Unit> &&promise);
+
   void on_update(tl_object_ptr<telegram_api::updateFolderPeers> update, Promise<Unit> &&promise);
 
   void on_update(tl_object_ptr<telegram_api::updateUserTyping> update, Promise<Unit> &&promise);
@@ -400,6 +404,7 @@ class UpdatesManager final : public Actor {
 
   void on_update(tl_object_ptr<telegram_api::updatePeerBlocked> update, Promise<Unit> &&promise);
   void on_update(tl_object_ptr<telegram_api::updateBotCommands> update, Promise<Unit> &&promise);
+  void on_update(tl_object_ptr<telegram_api::updateBotMenuButton> update, Promise<Unit> &&promise);
 
   void on_update(tl_object_ptr<telegram_api::updateChatParticipants> update, Promise<Unit> &&promise);
   void on_update(tl_object_ptr<telegram_api::updateChatParticipantAdd> update, Promise<Unit> &&promise);
@@ -504,6 +509,8 @@ class UpdatesManager final : public Actor {
   void on_update(tl_object_ptr<telegram_api::updateTheme> update, Promise<Unit> &&promise);
 
   void on_update(tl_object_ptr<telegram_api::updatePendingJoinRequests> update, Promise<Unit> &&promise);
+
+  void on_update(tl_object_ptr<telegram_api::updateSavedRingtones> update, Promise<Unit> &&promise);
 
   // unsupported updates
 };

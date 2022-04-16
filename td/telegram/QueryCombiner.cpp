@@ -19,6 +19,7 @@ QueryCombiner::QueryCombiner(Slice name, double min_delay) : next_query_time_(Ti
 
 void QueryCombiner::add_query(int64 query_id, Promise<Promise<Unit>> &&send_query, Promise<Unit> &&promise) {
   LOG(INFO) << "Add query " << query_id << " with" << (promise ? "" : "out") << " promise";
+  CHECK(query_id != 0);
   auto &query = queries_[query_id];
   if (promise) {
     query.promises.push_back(std::move(promise));
@@ -67,12 +68,10 @@ void QueryCombiner::on_get_query_result(int64 query_id, Result<Unit> &&result) {
   auto promises = std::move(it->second.promises);
   queries_.erase(it);
 
-  for (auto &promise : promises) {
-    if (result.is_ok()) {
-      promise.set_value(Unit());
-    } else {
-      promise.set_error(result.error().clone());
-    }
+  if (result.is_ok()) {
+    set_promises(promises);
+  } else {
+    fail_promises(promises, result.move_as_error());
   }
   loop();
 }

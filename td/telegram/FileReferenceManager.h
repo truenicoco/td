@@ -14,18 +14,18 @@
 #include "td/telegram/FullMessageId.h"
 #include "td/telegram/PhotoSizeSource.h"
 #include "td/telegram/SetWithPosition.h"
+#include "td/telegram/td_api.h"
 #include "td/telegram/UserId.h"
 
 #include "td/actor/actor.h"
 #include "td/actor/PromiseFuture.h"
 
 #include "td/utils/common.h"
+#include "td/utils/FlatHashMap.h"
 #include "td/utils/logging.h"
 #include "td/utils/Slice.h"
 #include "td/utils/Status.h"
 #include "td/utils/Variant.h"
-
-#include <unordered_map>
 
 namespace td {
 
@@ -52,9 +52,14 @@ class FileReferenceManager final : public Actor {
   FileSourceId create_chat_full_file_source(ChatId chat_id);
   FileSourceId create_channel_full_file_source(ChannelId channel_id);
   FileSourceId create_app_config_file_source();
+  FileSourceId create_saved_ringtones_file_source();
 
   using NodeId = FileId;
   void repair_file_reference(NodeId node_id, Promise<> promise);
+
+  void get_file_search_text(FileSourceId file_source_id, string unique_file_id, Promise<string> promise);
+
+  td_api::object_ptr<td_api::message> get_message_object(FileSourceId file_source_id) const;
 
   static void reload_photo(PhotoSizeSource source, Promise<Unit> promise);
 
@@ -140,17 +145,20 @@ class FileReferenceManager final : public Actor {
   struct FileSourceAppConfig {
     // empty
   };
+  struct FileSourceSavedRingtones {
+    // empty
+  };
 
   // append only
-  using FileSource =
-      Variant<FileSourceMessage, FileSourceUserPhoto, FileSourceChatPhoto, FileSourceChannelPhoto, FileSourceWallpapers,
-              FileSourceWebPage, FileSourceSavedAnimations, FileSourceRecentStickers, FileSourceFavoriteStickers,
-              FileSourceBackground, FileSourceChatFull, FileSourceChannelFull, FileSourceAppConfig>;
+  using FileSource = Variant<FileSourceMessage, FileSourceUserPhoto, FileSourceChatPhoto, FileSourceChannelPhoto,
+                             FileSourceWallpapers, FileSourceWebPage, FileSourceSavedAnimations,
+                             FileSourceRecentStickers, FileSourceFavoriteStickers, FileSourceBackground,
+                             FileSourceChatFull, FileSourceChannelFull, FileSourceAppConfig, FileSourceSavedRingtones>;
   vector<FileSource> file_sources_;
 
   int64 query_generation_{0};
 
-  std::unordered_map<NodeId, Node, FileIdHash> nodes_;
+  FlatHashMap<NodeId, Node, FileIdHash> nodes_;
 
   void run_node(NodeId node);
   void send_query(Destination dest, FileSourceId file_source_id);

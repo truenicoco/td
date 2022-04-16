@@ -18,6 +18,7 @@
 #include "td/actor/SchedulerLocalStorage.h"
 
 #include "td/utils/common.h"
+#include "td/utils/FlatHashMap.h"
 #include "td/utils/logging.h"
 #include "td/utils/Slice.h"
 #include "td/utils/Status.h"
@@ -26,9 +27,9 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 
 namespace td {
+
 class AnimationsManager;
 class BackgroundManager;
 class CallManager;
@@ -36,6 +37,7 @@ class ConfigManager;
 class ConfigShared;
 class ConnectionCreator;
 class ContactsManager;
+class DownloadManager;
 class FileManager;
 class FileReferenceManager;
 class GameManager;
@@ -46,6 +48,7 @@ class MessagesManager;
 class MtprotoHeader;
 class NetQueryDispatcher;
 class NotificationManager;
+class NotificationSettingsManager;
 class OptionManager;
 class PasswordManager;
 class SecretChatsManager;
@@ -205,6 +208,13 @@ class Global final : public ActorContext {
     contacts_manager_ = contacts_manager;
   }
 
+  ActorId<DownloadManager> download_manager() const {
+    return download_manager_;
+  }
+  void set_download_manager(ActorId<DownloadManager> download_manager) {
+    download_manager_ = std::move(download_manager);
+  }
+
   ActorId<FileManager> file_manager() const {
     return file_manager_;
   }
@@ -259,6 +269,13 @@ class Global final : public ActorContext {
   }
   void set_notification_manager(ActorId<NotificationManager> notification_manager) {
     notification_manager_ = notification_manager;
+  }
+
+  ActorId<NotificationSettingsManager> notification_settings_manager() const {
+    return notification_settings_manager_;
+  }
+  void set_notification_settings_manager(ActorId<NotificationSettingsManager> notification_settings_manager) {
+    notification_settings_manager_ = notification_settings_manager;
   }
 
   ActorId<OptionManager> option_manager() const {
@@ -411,6 +428,8 @@ class Global final : public ActorContext {
     return close_flag();
   }
 
+  static int32 get_retry_after(int32 error_code, Slice error_message);
+
   const std::vector<std::shared_ptr<NetStatsCallback>> &get_net_stats_file_callbacks() {
     return net_stats_file_callbacks_;
   }
@@ -437,6 +456,7 @@ class Global final : public ActorContext {
   ActorId<CallManager> call_manager_;
   ActorId<ConfigManager> config_manager_;
   ActorId<ContactsManager> contacts_manager_;
+  ActorId<DownloadManager> download_manager_;
   ActorId<FileManager> file_manager_;
   ActorId<FileReferenceManager> file_reference_manager_;
   ActorId<GameManager> game_manager_;
@@ -445,6 +465,7 @@ class Global final : public ActorContext {
   ActorId<LinkManager> link_manager_;
   ActorId<MessagesManager> messages_manager_;
   ActorId<NotificationManager> notification_manager_;
+  ActorId<NotificationSettingsManager> notification_settings_manager_;
   ActorId<OptionManager> option_manager_;
   ActorId<PasswordManager> password_manager_;
   ActorId<SecretChatsManager> secret_chats_manager_;
@@ -492,7 +513,7 @@ class Global final : public ActorContext {
 
   static int64 get_location_key(double latitude, double longitude);
 
-  std::unordered_map<int64, int64> location_access_hashes_;
+  FlatHashMap<int64, int64> location_access_hashes_;
 
   int32 to_unix_time(double server_time) const;
 

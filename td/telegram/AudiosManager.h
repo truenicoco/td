@@ -7,15 +7,14 @@
 #pragma once
 
 #include "td/telegram/files/FileId.h"
-#include "td/telegram/Photo.h"
+#include "td/telegram/PhotoSize.h"
 #include "td/telegram/SecretInputMedia.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
 
 #include "td/utils/buffer.h"
 #include "td/utils/common.h"
-
-#include <unordered_map>
+#include "td/utils/FlatHashMap.h"
 
 namespace td {
 
@@ -29,8 +28,10 @@ class AudiosManager {
 
   tl_object_ptr<td_api::audio> get_audio_object(FileId file_id) const;
 
+  td_api::object_ptr<td_api::notificationSound> get_notification_sound_object(FileId file_id) const;
+
   void create_audio(FileId file_id, string minithumbnail, PhotoSize thumbnail, string file_name, string mime_type,
-                    int32 duration, string title, string performer, bool replace);
+                    int32 duration, string title, string performer, int32 date, bool replace);
 
   tl_object_ptr<telegram_api::InputMedia> get_input_media(FileId file_id,
                                                           tl_object_ptr<telegram_api::InputFile> input_file,
@@ -62,6 +63,7 @@ class AudiosManager {
     string file_name;
     string mime_type;
     int32 duration = 0;
+    int32 date = 0;
     string title;
     string performer;
     string minithumbnail;
@@ -75,7 +77,7 @@ class AudiosManager {
   FileId on_get_audio(unique_ptr<Audio> new_audio, bool replace);
 
   Td *td_;
-  std::unordered_map<FileId, unique_ptr<Audio>, FileIdHash> audios_;
+  FlatHashMap<FileId, unique_ptr<Audio>, FileIdHash> audios_;
 };
 
 }  // namespace td

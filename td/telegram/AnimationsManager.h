@@ -8,7 +8,7 @@
 
 #include "td/telegram/files/FileId.h"
 #include "td/telegram/files/FileSourceId.h"
-#include "td/telegram/Photo.h"
+#include "td/telegram/PhotoSize.h"
 #include "td/telegram/SecretInputMedia.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
@@ -18,9 +18,8 @@
 
 #include "td/utils/buffer.h"
 #include "td/utils/common.h"
+#include "td/utils/FlatHashMap.h"
 #include "td/utils/Status.h"
-
-#include <unordered_map>
 
 namespace td {
 
@@ -142,7 +141,7 @@ class AnimationsManager final : public Actor {
   Td *td_;
   ActorShared<> parent_;
 
-  std::unordered_map<FileId, unique_ptr<Animation>, FileIdHash> animations_;
+  FlatHashMap<FileId, unique_ptr<Animation>, FileIdHash> animations_;
 
   int32 saved_animations_limit_ = 200;
   vector<FileId> saved_animation_ids_;
