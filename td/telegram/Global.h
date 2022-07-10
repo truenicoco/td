@@ -8,18 +8,19 @@
 
 #include "td/telegram/DhConfig.h"
 #include "td/telegram/net/DcId.h"
+#include "td/telegram/net/MtprotoHeader.h"
 #include "td/telegram/net/NetQueryCreator.h"
 #include "td/telegram/TdParameters.h"
 
 #include "td/net/NetStats.h"
 
 #include "td/actor/actor.h"
-#include "td/actor/PromiseFuture.h"
 #include "td/actor/SchedulerLocalStorage.h"
 
 #include "td/utils/common.h"
 #include "td/utils/FlatHashMap.h"
 #include "td/utils/logging.h"
+#include "td/utils/Promise.h"
 #include "td/utils/Slice.h"
 #include "td/utils/Status.h"
 #include "td/utils/Time.h"
@@ -45,7 +46,6 @@ class GroupCallManager;
 class LanguagePackManager;
 class LinkManager;
 class MessagesManager;
-class MtprotoHeader;
 class NetQueryDispatcher;
 class NotificationManager;
 class NotificationSettingsManager;
@@ -83,6 +83,8 @@ class Global final : public ActorContext {
     LOG_CHECK(td_db_) << close_flag() << " " << file << " " << line;
     return td_db_.get();
   }
+
+  void log_out(Slice reason);
 
   void close_all(Promise<> on_finished);
   void close_and_destroy_all(Promise<> on_finished);

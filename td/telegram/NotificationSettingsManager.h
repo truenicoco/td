@@ -14,11 +14,11 @@
 #include "td/telegram/telegram_api.h"
 
 #include "td/actor/actor.h"
-#include "td/actor/PromiseFuture.h"
-#include "td/actor/Timeout.h"
+#include "td/actor/MultiTimeout.h"
 
 #include "td/utils/common.h"
 #include "td/utils/FlatHashMap.h"
+#include "td/utils/Promise.h"
 #include "td/utils/Status.h"
 
 #include <memory>
@@ -43,6 +43,8 @@ class NotificationSettingsManager final : public Actor {
   int32 get_scope_mute_until(NotificationSettingsScope scope) const;
 
   const unique_ptr<NotificationSound> &get_scope_notification_sound(NotificationSettingsScope scope) const;
+
+  bool get_scope_show_preview(NotificationSettingsScope scope) const;
 
   bool get_scope_disable_pinned_message_notifications(NotificationSettingsScope scope) const;
 
@@ -94,8 +96,6 @@ class NotificationSettingsManager final : public Actor {
                                       Promise<Unit> &&promise);
 
   void init();
-
-  void after_get_difference();
 
   void on_binlog_events(vector<BinlogEvent> &&events);
 

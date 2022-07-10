@@ -168,9 +168,10 @@ Status NetQueryDispatcher::wait_dc_init(DcId dc_id, bool force) {
     int32 slow_net_scheduler_id = G()->get_slow_net_scheduler_id();
 
     auto raw_dc_id = dc_id.get_raw_id();
-    int32 upload_session_count = raw_dc_id != 2 && raw_dc_id != 4 ? 8 : 4;
-    int32 download_session_count = 2;
-    int32 download_small_session_count = 2;
+    bool is_premium = G()->shared_config().get_option_boolean("is_premium");
+    int32 upload_session_count = (raw_dc_id != 2 && raw_dc_id != 4) || is_premium ? 8 : 4;
+    int32 download_session_count = is_premium ? 8 : 2;
+    int32 download_small_session_count = is_premium ? 8 : 2;
     dc.main_session_ = create_actor<SessionMultiProxy>(PSLICE() << "SessionMultiProxy:" << raw_dc_id << ":main",
                                                        session_count, auth_data, raw_dc_id == main_dc_id_, use_pfs,
                                                        false, false, is_cdn, need_destroy_key);
@@ -272,13 +273,10 @@ void NetQueryDispatcher::update_mtproto_header() {
   }
 }
 
-void NetQueryDispatcher::update_valid_dc(DcId dc_id) {
-  wait_dc_init(dc_id, true).ignore();
-}
-
 bool NetQueryDispatcher::is_dc_inited(int32 raw_dc_id) {
   return dcs_[raw_dc_id - 1].is_valid_.load(std::memory_order_relaxed);
 }
+
 int32 NetQueryDispatcher::get_session_count() {
   return max(narrow_cast<int32>(G()->shared_config().get_option_integer("session_count")), 1);
 }
@@ -350,6 +348,10 @@ void NetQueryDispatcher::set_main_dc_id(int32 new_main_dc_id) {
   send_closure_later(dc_auth_manager_, &DcAuthManager::update_main_dc,
                      DcId::internal(main_dc_id_.load(std::memory_order_relaxed)));
   G()->td_db()->get_binlog_pmc()->set("main_dc_id", to_string(main_dc_id_.load(std::memory_order_relaxed)));
+}
+
+void NetQueryDispatcher::check_authorization_is_ok() {
+  send_closure(dc_auth_manager_, &DcAuthManager::check_authorization_is_ok);
 }
 
 }  // namespace td

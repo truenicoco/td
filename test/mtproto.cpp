@@ -29,7 +29,6 @@
 
 #include "td/actor/actor.h"
 #include "td/actor/ConcurrentScheduler.h"
-#include "td/actor/PromiseFuture.h"
 
 #include "td/utils/base64.h"
 #include "td/utils/BufferedFd.h"
@@ -39,6 +38,7 @@
 #include "td/utils/port/Clocks.h"
 #include "td/utils/port/IPAddress.h"
 #include "td/utils/port/SocketFd.h"
+#include "td/utils/Promise.h"
 #include "td/utils/Random.h"
 #include "td/utils/Slice.h"
 #include "td/utils/SliceBuilder.h"
@@ -470,7 +470,7 @@ class Socks5TestActor final : public td::Actor {
     if (r_socket.is_error()) {
       return promise.set_error(td::Status::Error(PSTRING() << "Failed to open socket: " << r_socket.error()));
     }
-    td::create_actor<td::Socks5>("socks5", r_socket.move_as_ok(), mtproto_ip_address, "", "",
+    td::create_actor<td::Socks5>("Socks5", r_socket.move_as_ok(), mtproto_ip_address, "", "",
                                  td::make_unique<Callback>(std::move(promise)), actor_shared(this))
         .release();
   }

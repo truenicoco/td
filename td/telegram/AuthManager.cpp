@@ -28,12 +28,11 @@
 #include "td/telegram/TopDialogManager.h"
 #include "td/telegram/UpdatesManager.h"
 
-#include "td/actor/PromiseFuture.h"
-
 #include "td/utils/base64.h"
 #include "td/utils/format.h"
 #include "td/utils/logging.h"
 #include "td/utils/misc.h"
+#include "td/utils/Promise.h"
 #include "td/utils/ScopeGuard.h"
 #include "td/utils/Slice.h"
 #include "td/utils/Time.h"
@@ -59,6 +58,7 @@ AuthManager::AuthManager(int32 api_id, const string &api_hash, ActorShared<> par
       ContactsManager::send_get_me_query(
           td_, PromiseCreator::lambda([this](Result<Unit> result) { update_state(State::Ok); }));
     }
+    G()->net_query_dispatcher().check_authorization_is_ok();
   } else if (auth_str == "logout") {
     LOG(WARNING) << "Continue to log out";
     update_state(State::LoggingOut);
@@ -76,8 +76,11 @@ void AuthManager::start_up() {
   if (state_ == State::LoggingOut) {
     send_log_out_query();
   } else if (state_ == State::DestroyingKeys) {
-    G()->net_query_dispatcher().destroy_auth_keys(
-        PromiseCreator::lambda([](Unit) { send_closure_later(G()->td(), &Td::destroy); }, PromiseCreator::Ignore()));
+    G()->net_query_dispatcher().destroy_auth_keys(PromiseCreator::lambda([](Result<Unit> result) {
+      if (result.is_ok()) {
+        send_closure_later(G()->td(), &Td::destroy);
+      }
+    }));
   }
 }
 void AuthManager::tear_down() {
@@ -684,7 +687,7 @@ void AuthManager::on_log_out_result(NetQueryPtr &result) {
   } else {
     status = std::move(result->error());
   }
-  LOG_IF(ERROR, status.is_error()) << "Receive error for auth.logOut: " << status;
+  LOG_IF(ERROR, status.is_error() && status.error().code() != 401) << "Receive error for auth.logOut: " << status;
   // state_ will stay LoggingOut, so no queries will work.
   destroy_auth_keys();
   if (query_id_ != 0) {
@@ -692,6 +695,10 @@ void AuthManager::on_log_out_result(NetQueryPtr &result) {
   }
 }
 void AuthManager::on_authorization_lost(string source) {
+  if (state_ == State::LoggingOut && net_query_type_ == NetQueryType::LogOut) {
+    LOG(INFO) << "Ignore authorization loss because of " << source << ", while logging out";
+    return;
+  }
   LOG(WARNING) << "Lost authorization because of " << source;
   destroy_auth_keys();
 }
@@ -701,12 +708,15 @@ void AuthManager::destroy_auth_keys() {
     return;
   }
   update_state(State::DestroyingKeys);
-  auto promise = PromiseCreator::lambda(
-      [](Unit) {
-        G()->net_query_dispatcher().destroy_auth_keys(PromiseCreator::lambda(
-            [](Unit) { send_closure_later(G()->td(), &Td::destroy); }, PromiseCreator::Ignore()));
-      },
-      PromiseCreator::Ignore());
+  auto promise = PromiseCreator::lambda([](Result<Unit> result) {
+    if (result.is_ok()) {
+      G()->net_query_dispatcher().destroy_auth_keys(PromiseCreator::lambda([](Result<Unit> result) {
+        if (result.is_ok()) {
+          send_closure_later(G()->td(), &Td::destroy);
+        }
+      }));
+    }
+  });
   G()->td_db()->get_binlog_pmc()->set("auth", "destroy");
   G()->td_db()->get_binlog_pmc()->force_sync(std::move(promise));
 }
@@ -802,7 +812,7 @@ void AuthManager::on_get_authorization(tl_object_ptr<telegram_api::auth_Authoriz
   } else {
     td_->set_is_bot_online(true);
   }
-  send_closure(G()->config_manager(), &ConfigManager::request_config);
+  send_closure(G()->config_manager(), &ConfigManager::request_config, false);
   if (query_id_ != 0) {
     on_query_ok();
   }

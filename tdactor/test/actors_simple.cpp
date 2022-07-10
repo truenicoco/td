@@ -16,6 +16,7 @@
 #include "td/utils/Observer.h"
 #include "td/utils/port/FileFd.h"
 #include "td/utils/port/thread.h"
+#include "td/utils/Promise.h"
 #include "td/utils/Slice.h"
 #include "td/utils/Status.h"
 #include "td/utils/StringBuilder.h"
@@ -329,7 +330,7 @@ class MasterActor final : public MsgActor {
  public:
   void loop() final {
     alive_ = true;
-    slave = td::create_actor<Slave>("slave", static_cast<td::ActorId<MsgActor>>(actor_id(this)));
+    slave = td::create_actor<Slave>("Slave", static_cast<td::ActorId<MsgActor>>(actor_id(this)));
     stop();
   }
   td::ActorOwn<Slave> slave;

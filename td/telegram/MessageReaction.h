@@ -14,10 +14,9 @@
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
 
-#include "td/actor/PromiseFuture.h"
-
 #include "td/utils/common.h"
 #include "td/utils/FlatHashMap.h"
+#include "td/utils/Promise.h"
 #include "td/utils/StringBuilder.h"
 
 #include <utility>
@@ -77,6 +76,10 @@ class MessageReaction {
   const vector<std::pair<ChannelId, MinChannel>> &get_recent_chooser_min_channels() const {
     return recent_chooser_min_channels_;
   }
+
+  void add_recent_chooser_dialog_id(DialogId dialog_id);
+
+  bool remove_recent_chooser_dialog_id(DialogId dialog_id);
 
   td_api::object_ptr<td_api::messageReaction> get_message_reaction_object(Td *td) const;
 
@@ -148,6 +151,8 @@ struct MessageReactions {
   void update_from(const MessageReactions &old_reactions);
 
   void sort_reactions(const FlatHashMap<string, size_t> &active_reaction_pos);
+
+  void fix_chosen_reaction(DialogId my_dialog_id);
 
   static bool need_update_message_reactions(const MessageReactions *old_reactions,
                                             const MessageReactions *new_reactions);

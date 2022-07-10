@@ -17,6 +17,7 @@
 #include "td/utils/format.h"
 #include "td/utils/logging.h"
 #include "td/utils/misc.h"
+#include "td/utils/Promise.h"
 #include "td/utils/SliceBuilder.h"
 #include "td/utils/Status.h"
 #include "td/utils/StringBuilder.h"
@@ -264,7 +265,7 @@ void MultiSequenceDispatcherOld::send(NetQueryPtr query) {
   auto &data = it_ok.first->second;
   if (it_ok.second) {
     LOG(DEBUG) << "Create SequenceDispatcher" << sequence_id;
-    data.dispatcher_ = create_actor<SequenceDispatcher>("sequence dispatcher", actor_shared(this, sequence_id));
+    data.dispatcher_ = create_actor<SequenceDispatcher>("SequenceDispatcher", actor_shared(this, sequence_id));
   }
   data.cnt_++;
   query->debug(PSTRING() << "send to SequenceDispatcher " << tag("sequence_id", sequence_id));

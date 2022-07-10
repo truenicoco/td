@@ -29,6 +29,7 @@
 #include "td/telegram/TdDb.h"
 #include "td/telegram/telegram_api.h"
 #include "td/telegram/UpdatesManager.h"
+#include "td/telegram/VoiceNotesManager.h"
 
 #include "td/db/binlog/BinlogEvent.h"
 #include "td/db/binlog/BinlogHelper.h"
@@ -581,6 +582,10 @@ const unique_ptr<NotificationSound> &NotificationSettingsManager::get_scope_noti
   return get_scope_notification_settings(scope)->sound;
 }
 
+bool NotificationSettingsManager::get_scope_show_preview(NotificationSettingsScope scope) const {
+  return get_scope_notification_settings(scope)->show_preview;
+}
+
 bool NotificationSettingsManager::get_scope_disable_pinned_message_notifications(
     NotificationSettingsScope scope) const {
   return get_scope_notification_settings(scope)->disable_pinned_message_notifications;
@@ -813,7 +818,7 @@ FileId NotificationSettingsManager::get_saved_ringtone(int64 ringtone_id, Promis
     CHECK(file_view.get_type() == FileType::Ringtone);
     CHECK(file_view.has_remote_location());
     if (file_view.remote_location().get_id() == ringtone_id) {
-      return file_view.file_id();
+      return file_view.get_main_file_id();
     }
   }
   return {};
@@ -869,14 +874,31 @@ void NotificationSettingsManager::add_saved_ringtone(td_api::object_ptr<td_api::
   FileId file_id = r_file_id.ok();
   auto file_view = td_->file_manager_->get_file_view(file_id);
   CHECK(!file_view.empty());
+  if (file_view.size() > G()->shared_config().get_option_integer("notification_sound_size_max")) {
+    return promise.set_error(Status::Error(400, "Notification sound file is too big"));
+  }
+  auto file_type = file_view.get_type();
+  int32 duration = 0;
+  switch (file_type) {
+    case FileType::Audio:
+      duration = td_->audios_manager_->get_audio_duration(file_id);
+      break;
+    case FileType::VoiceNote:
+      duration = td_->voice_notes_manager_->get_voice_note_duration(file_id);
+      break;
+    default:
+      break;
+  }
+  if (duration > G()->shared_config().get_option_integer("notification_sound_duration_max")) {
+    return promise.set_error(Status::Error(400, "Notification sound is too long"));
+  }
   if (file_view.has_remote_location() && !file_view.is_encrypted()) {
     CHECK(file_view.remote_location().is_document());
     if (file_view.main_remote_location().is_web()) {
       return promise.set_error(Status::Error(400, "Can't use web document as notification sound"));
     }
 
-    FileId ringtone_file_id = file_view.file_id();
-    auto file_type = file_view.get_type();
+    FileId ringtone_file_id = file_view.get_main_file_id();
     if (file_type != FileType::Ringtone) {
       if (file_type != FileType::Audio && file_type != FileType::VoiceNote) {
         return promise.set_error(Status::Error(400, "Unsupported file specified"));
@@ -898,7 +920,7 @@ void NotificationSettingsManager::add_saved_ringtone(td_api::object_ptr<td_api::
     }
 
     send_save_ringtone_query(
-        file_view.file_id(), false,
+        file_view.get_main_file_id(), false,
         PromiseCreator::lambda(
             [actor_id = actor_id(this), file_id = ringtone_file_id, promise = std::move(promise)](
                 Result<telegram_api::object_ptr<telegram_api::account_SavedRingtone>> &&result) mutable {
@@ -960,9 +982,9 @@ void NotificationSettingsManager::on_upload_ringtone(FileId file_id,
     }
 
     send_save_ringtone_query(
-        file_view.file_id(), false,
+        file_view.get_main_file_id(), false,
         PromiseCreator::lambda(
-            [actor_id = actor_id(this), file_id = file_view.file_id(), promise = std::move(promise)](
+            [actor_id = actor_id(this), file_id = file_view.get_main_file_id(), promise = std::move(promise)](
                 Result<telegram_api::object_ptr<telegram_api::account_SavedRingtone>> &&result) mutable {
               if (result.is_error()) {
                 promise.set_error(result.move_as_error());
@@ -1069,7 +1091,7 @@ void NotificationSettingsManager::remove_saved_ringtone(int64 ringtone_id, Promi
     CHECK(file_view.has_remote_location());
     if (file_view.remote_location().get_id() == ringtone_id) {
       send_save_ringtone_query(
-          file_view.file_id(), true,
+          file_view.get_main_file_id(), true,
           PromiseCreator::lambda(
               [actor_id = actor_id(this), ringtone_id, promise = std::move(promise)](
                   Result<telegram_api::object_ptr<telegram_api::account_SavedRingtone>> &&result) mutable {
@@ -1438,26 +1460,6 @@ void NotificationSettingsManager::reset_notify_settings(Promise<Unit> &&promise)
 void NotificationSettingsManager::get_notify_settings_exceptions(NotificationSettingsScope scope, bool filter_scope,
                                                                  bool compare_sound, Promise<Unit> &&promise) {
   td_->create_handler<GetNotifySettingsExceptionsQuery>(std::move(promise))->send(scope, filter_scope, compare_sound);
-}
-
-void NotificationSettingsManager::after_get_difference() {
-  if (td_->auth_manager_->is_bot()) {
-    return;
-  }
-
-  if (!users_notification_settings_.is_synchronized) {
-    send_get_scope_notification_settings_query(NotificationSettingsScope::Private, Promise<>());
-  }
-  if (!chats_notification_settings_.is_synchronized) {
-    send_get_scope_notification_settings_query(NotificationSettingsScope::Group, Promise<>());
-  }
-  if (!channels_notification_settings_.is_synchronized) {
-    send_get_scope_notification_settings_query(NotificationSettingsScope::Channel, Promise<>());
-  }
-
-  if (td_->is_online() && !are_saved_ringtones_reloaded_) {
-    reload_saved_ringtones(Auto());
-  }
 }
 
 void NotificationSettingsManager::on_binlog_events(vector<BinlogEvent> &&events) {

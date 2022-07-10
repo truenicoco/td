@@ -12,9 +12,9 @@
 #include "td/telegram/UserId.h"
 
 #include "td/actor/actor.h"
-#include "td/actor/PromiseFuture.h"
 
 #include "td/utils/common.h"
+#include "td/utils/Promise.h"
 #include "td/utils/Slice.h"
 #include "td/utils/Status.h"
 
@@ -47,10 +47,13 @@ class LinkManager final : public Actor {
   };
 
   // checks whether the link is a valid tg, ton or HTTP(S) URL and returns it in a canonical form
-  static Result<string> check_link(Slice link, bool http_only = false, bool https_only = false);
+  static Result<string> check_link(CSlice link, bool http_only = false, bool https_only = false);
+
+  // same as check_link, but returns an empty string instead of an error
+  static string get_checked_link(Slice link, bool http_only = false, bool https_only = false);
 
   // checks whether the link is a supported tg or t.me link and parses it
-  static unique_ptr<InternalLink> parse_internal_link(Slice link);
+  static unique_ptr<InternalLink> parse_internal_link(Slice link, bool is_trusted = false);
 
   void update_autologin_domains(string autologin_token, vector<string> autologin_domains,
                                 vector<string> url_auth_domains);
@@ -93,11 +96,13 @@ class LinkManager final : public Actor {
   class InternalLinkDialogInvite;
   class InternalLinkFilterSettings;
   class InternalLinkGame;
+  class InternalLinkInvoice;
   class InternalLinkLanguage;
   class InternalLinkLanguageSettings;
   class InternalLinkMessage;
   class InternalLinkMessageDraft;
   class InternalLinkPassportDataRequest;
+  class InternalLinkPremiumFeatures;
   class InternalLinkPrivacyAndSecuritySettings;
   class InternalLinkProxy;
   class InternalLinkPublicDialog;
@@ -119,14 +124,16 @@ class LinkManager final : public Actor {
   // returns information about the link
   static LinkInfo get_link_info(Slice link);
 
-  static unique_ptr<InternalLink> parse_tg_link_query(Slice query);
+  static unique_ptr<InternalLink> parse_tg_link_query(Slice query, bool is_trusted);
 
-  static unique_ptr<InternalLink> parse_t_me_link_query(Slice query);
+  static unique_ptr<InternalLink> parse_t_me_link_query(Slice query, bool is_trusted);
 
   static unique_ptr<InternalLink> get_internal_link_passport(Slice query,
                                                              const vector<std::pair<string, string>> &args);
 
   static unique_ptr<InternalLink> get_internal_link_message_draft(Slice url, Slice text);
+
+  static Result<string> check_link_impl(Slice link, bool http_only, bool https_only);
 
   Td *td_;
   ActorShared<> parent_;

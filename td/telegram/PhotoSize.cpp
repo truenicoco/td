@@ -22,39 +22,25 @@
 
 namespace td {
 
-static uint16 get_dimension(int32 size, const char *source) {
-  if (size < 0 || size > 65535) {
-    LOG(ERROR) << "Wrong image dimension = " << size << " from " << source;
+static int32 get_minithumbnail_size(const string &packed) {
+  if (packed.size() < 3) {
     return 0;
   }
-  return narrow_cast<uint16>(size);
-}
-
-Dimensions get_dimensions(int32 width, int32 height, const char *source) {
-  Dimensions result;
-  result.width = get_dimension(width, source);
-  result.height = get_dimension(height, source);
-  if (result.width == 0 || result.height == 0) {
-    result.width = 0;
-    result.height = 0;
+  if (packed[0] == '\x01') {
+    return max(static_cast<unsigned char>(packed[1]), static_cast<unsigned char>(packed[2]));
   }
-  return result;
+  return 0;
 }
 
-static uint32 get_pixel_count(const Dimensions &dimensions) {
-  return static_cast<uint32>(dimensions.width) * static_cast<uint32>(dimensions.height);
-}
+bool need_update_dialog_photo_minithumbnail(const string &from, const string &to) {
+  if (from == to) {
+    return false;
+  }
 
-bool operator==(const Dimensions &lhs, const Dimensions &rhs) {
-  return lhs.width == rhs.width && lhs.height == rhs.height;
-}
-
-bool operator!=(const Dimensions &lhs, const Dimensions &rhs) {
-  return !(lhs == rhs);
-}
-
-StringBuilder &operator<<(StringBuilder &string_builder, const Dimensions &dimensions) {
-  return string_builder << "(" << dimensions.width << ", " << dimensions.height << ")";
+  auto from_size = get_minithumbnail_size(from);
+  auto to_size = get_minithumbnail_size(to);
+  // dialog photo minithumbnail is expected to be 8x8
+  return to_size != 0 && (to_size <= 8 || from_size > 8);
 }
 
 td_api::object_ptr<td_api::minithumbnail> get_minithumbnail_object(const string &packed) {
@@ -154,7 +140,7 @@ PhotoSize get_secret_thumbnail_photo_size(FileManager *file_manager, BufferSlice
   }
   PhotoSize res;
   res.type = 't';
-  res.dimensions = get_dimensions(width, height, "get_secret_thumbnail_photo_size");
+  res.dimensions = get_dimensions(width, height, nullptr);
   res.size = narrow_cast<int32>(bytes.size());
 
   // generate some random remote location to save
@@ -257,6 +243,10 @@ Variant<PhotoSize, string> get_photo_size(FileManager *file_manager, PhotoSizeSo
   if (source.get_type("get_photo_size") == PhotoSizeSource::Type::Thumbnail) {
     source.thumbnail().thumbnail_type = res.type;
   }
+  if (res.size < 0 || res.size > 1000000000) {
+    LOG(ERROR) << "Receive photo of size " << res.size;
+    res.size = 0;
+  }
 
   res.file_id = register_photo_size(file_manager, source, id, access_hash, std::move(file_reference), owner_dialog_id,
                                     res.size, dc_id, format);
@@ -273,8 +263,8 @@ AnimationSize get_animation_size(FileManager *file_manager, PhotoSizeSource sour
                                  tl_object_ptr<telegram_api::videoSize> &&size) {
   CHECK(size != nullptr);
   AnimationSize res;
-  if (size->type_ != "v" && size->type_ != "u") {
-    LOG(ERROR) << "Wrong videoSize \"" << size->type_ << "\" in " << to_string(size);
+  if (size->type_ != "p" && size->type_ != "u" && size->type_ != "v") {
+    LOG(ERROR) << "Unsupported videoSize \"" << size->type_ << "\" in " << to_string(size);
   }
   res.type = static_cast<uint8>(size->type_[0]);
   if (res.type >= 128) {
@@ -289,6 +279,10 @@ AnimationSize get_animation_size(FileManager *file_manager, PhotoSizeSource sour
 
   if (source.get_type("get_animation_size") == PhotoSizeSource::Type::Thumbnail) {
     source.thumbnail().thumbnail_type = res.type;
+  }
+  if (res.size < 0 || res.size > 1000000000) {
+    LOG(ERROR) << "Receive animation of size " << res.size;
+    res.size = 0;
   }
 
   res.file_id = register_photo_size(file_manager, source, id, access_hash, std::move(file_reference), owner_dialog_id,
@@ -316,9 +310,9 @@ PhotoSize get_web_document_photo_size(FileManager *file_manager, FileType file_t
       }
       auto http_url = r_http_url.move_as_ok();
       auto url = http_url.get_url();
-      file_id = file_manager->register_remote(FullRemoteFileLocation(file_type, url, web_document->access_hash_),
-                                              FileLocationSource::FromServer, owner_dialog_id, 0, web_document->size_,
-                                              get_url_query_file_name(http_url.query_));
+      file_id = file_manager->register_remote(
+          FullRemoteFileLocation(file_type, url, web_document->access_hash_), FileLocationSource::FromServer,
+          owner_dialog_id, 0, static_cast<uint32>(web_document->size_), get_url_query_file_name(http_url.query_));
       size = web_document->size_;
       mime_type = std::move(web_document->mime_type_);
       attributes = std::move(web_document->attributes_);
@@ -377,6 +371,11 @@ PhotoSize get_web_document_photo_size(FileManager *file_manager, FileType file_t
   s.dimensions = dimensions;
   s.size = size;
   s.file_id = file_id;
+
+  if (s.size < 0 || s.size > 1000000000) {
+    LOG(ERROR) << "Receive web photo of size " << s.size;
+    s.size = 0;
+  }
   return s;
 }
 
@@ -408,8 +407,8 @@ bool operator<(const PhotoSize &lhs, const PhotoSize &rhs) {
   if (lhs.size != rhs.size) {
     return lhs.size < rhs.size;
   }
-  auto lhs_pixels = get_pixel_count(lhs.dimensions);
-  auto rhs_pixels = get_pixel_count(rhs.dimensions);
+  auto lhs_pixels = get_dimensions_pixel_count(lhs.dimensions);
+  auto rhs_pixels = get_dimensions_pixel_count(rhs.dimensions);
   if (lhs_pixels != rhs_pixels) {
     return lhs_pixels < rhs_pixels;
   }

@@ -349,7 +349,7 @@ Result<tl_object_ptr<telegram_api::InputBotInlineMessage>> InlineQueriesManager:
     return Status::Error(400, "Inline message can't be empty");
   }
   TRY_RESULT(reply_markup, get_reply_markup(std::move(reply_markup_ptr), true, true, false, true));
-  auto input_reply_markup = get_input_reply_markup(reply_markup);
+  auto input_reply_markup = get_input_reply_markup(td_->contacts_manager_.get(), reply_markup);
 
   auto constructor_id = input_message_content->get_id();
   if (constructor_id == td_api::inputMessageText::ID) {
@@ -694,7 +694,7 @@ Result<tl_object_ptr<telegram_api::InputBotInlineResult>> InlineQueriesManager::
         return r_reply_markup.move_as_error();
       }
 
-      auto input_reply_markup = get_input_reply_markup(r_reply_markup.ok());
+      auto input_reply_markup = get_input_reply_markup(td_->contacts_manager_.get(), r_reply_markup.ok());
       int32 flags = 0;
       if (input_reply_markup != nullptr) {
         flags |= telegram_api::inputBotInlineMessageGame::REPLY_MARKUP_MASK;
@@ -1234,7 +1234,7 @@ template <>
 tl_object_ptr<td_api::sticker> copy(const td_api::sticker &obj) {
   return td_api::make_object<td_api::sticker>(obj.set_id_, obj.width_, obj.height_, obj.emoji_, copy(obj.type_),
                                               transform(obj.outline_, copy_closed_vector_path), copy(obj.thumbnail_),
-                                              copy(obj.sticker_));
+                                              copy(obj.premium_animation_), copy(obj.sticker_));
 }
 
 template <>
@@ -1246,7 +1246,8 @@ tl_object_ptr<td_api::video> copy(const td_api::video &obj) {
 
 template <>
 tl_object_ptr<td_api::voiceNote> copy(const td_api::voiceNote &obj) {
-  return td_api::make_object<td_api::voiceNote>(obj.duration_, obj.waveform_, obj.mime_type_, copy(obj.voice_));
+  return td_api::make_object<td_api::voiceNote>(obj.duration_, obj.waveform_, obj.mime_type_, obj.is_recognized_,
+                                                obj.recognized_text_, copy(obj.voice_));
 }
 
 template <>
