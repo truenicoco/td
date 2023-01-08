@@ -1,4 +1,4 @@
-name: Build and publish tdlibjson linux binaries
+name: Build and publish FreeBSD tdlibjson binaries
 
 on:
   push:
@@ -6,27 +6,6 @@ on:
       - "aiotdlib_*"
 
 jobs:
-  build_linux:
-    name: Build Linux x86_64
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
-
-      - name: Set up Earthly
-        uses: earthly/actions/setup-earthly@v1
-
-      - name: Check out the repo
-        uses: actions/checkout@v2
-
-      - name: run earthly build
-        run: earthly +build-all-platforms
-
-      - name: release artifacts to packages
-        uses: softprops/action-gh-release@v1
-        with:
-          files: build/libtdjson_linux_amd64.so
-
   build_freebsd:
     name: Build FreeBSD x86_64
     runs-on: macos-12
