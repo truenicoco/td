@@ -26,7 +26,7 @@ jobs:
           run: |
             mkdir ./build
             cmake -DCMAKE_BUILD_TYPE=Release -S ./tdlib -B ./build -G Ninja
-            cmake --build ./build --target tdjson --parallel
+            cmake --build ./build --target tdjson --parallel 2
             strip --strip-all ./build/libtdjson.so.*
             mv -v ./build/libtdjson.so.* ./build/libtdjson_freebsd_amd64.so
 
