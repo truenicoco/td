@@ -19,7 +19,7 @@ jobs:
         uses: vmactions/freebsd-vm@v0
         with:
           release: 13.1
-          mem: 2048
+          mem: 3072
           prepare: |
             pkg update
             pkg install -y llvm cmake ninja gperf openssl lzlib gperf
