@@ -1,13 +1,13 @@
-name: Build and publish tdlibjson linux binaries
+name: Build and publish Linux tdlibjson binaries
 
 on:
   push:
     tags:
-      - 'aiotdlib_*'
+      - "aiotdlib_*"
 
 jobs:
-  build:
-    name: Set up Earthly and run build
+  build_linux:
+    name: Build Linux x86_64
     runs-on: ubuntu-latest
     steps:
       - name: Set up QEMU
