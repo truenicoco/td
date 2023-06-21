@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -194,7 +194,19 @@ std::string TD_TL_writer_java::gen_output_begin() const {
   return "package " + package_name +
          ";\n\n"
          "public class " +
-         tl_name + " {\n";
+         tl_name +
+         " {\n"
+         "    static {\n"
+         "        try {\n"
+         "            System.loadLibrary(\"tdjni\");\n"
+         "        } catch (UnsatisfiedLinkError e) {\n"
+         "            e.printStackTrace();\n" +
+         "        }\n"
+         "    }\n\n"
+         "    private " +
+         tl_name +
+         "() {\n"
+         "    }\n\n";
 }
 
 std::string TD_TL_writer_java::gen_output_end() const {
@@ -226,8 +238,11 @@ std::string TD_TL_writer_java::gen_class_begin(const std::string &class_name, co
     full_class_name += "<" + fetched_type + ">";
   }
   std::string result = "    public " + std::string(is_proxy ? "abstract " : "") + full_class_name + " {\n";
+  if (is_proxy) {
+    result += "        public " + class_name + "() {\n        }\n";
+  }
   if (class_name == gen_base_tl_class_name() || class_name == gen_base_function_class_name()) {
-    result += "        public native String toString();\n";
+    result += "\n        public native String toString();\n";
   }
 
   return result;

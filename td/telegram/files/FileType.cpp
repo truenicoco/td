@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -117,7 +117,7 @@ FileType get_main_file_type(FileType file_type) {
 }
 
 CSlice get_file_type_name(FileType file_type) {
-  switch (file_type) {
+  switch (get_main_file_type(file_type)) {
     case FileType::Thumbnail:
       return CSlice("thumbnails");
     case FileType::ProfilePhoto:
@@ -142,24 +142,14 @@ CSlice get_file_type_name(FileType file_type) {
       return CSlice("animations");
     case FileType::EncryptedThumbnail:
       return CSlice("secret_thumbnails");
-    case FileType::Wallpaper:
-      return CSlice("wallpapers");
     case FileType::VideoNote:
       return CSlice("video_notes");
-    case FileType::SecureDecrypted:
-      return CSlice("passport");
     case FileType::SecureEncrypted:
       return CSlice("passport");
     case FileType::Background:
       return CSlice("wallpapers");
-    case FileType::DocumentAsFile:
-      return CSlice("documents");
     case FileType::Ringtone:
       return CSlice("notification_sounds");
-    case FileType::CallLog:
-      return CSlice("documents");
-    case FileType::Size:
-    case FileType::None:
     default:
       UNREACHABLE();
       return CSlice("none");
@@ -206,7 +196,52 @@ bool is_document_file_type(FileType file_type) {
 }
 
 StringBuilder &operator<<(StringBuilder &string_builder, FileType file_type) {
-  return string_builder << get_file_type_name(file_type);
+  switch (file_type) {
+    case FileType::Thumbnail:
+      return string_builder << "Thumbnail";
+    case FileType::ProfilePhoto:
+      return string_builder << "ChatPhoto";
+    case FileType::Photo:
+      return string_builder << "Photo";
+    case FileType::VoiceNote:
+      return string_builder << "VoiceNote";
+    case FileType::Video:
+      return string_builder << "Video";
+    case FileType::Document:
+      return string_builder << "Document";
+    case FileType::Encrypted:
+      return string_builder << "Secret";
+    case FileType::Temp:
+      return string_builder << "Temp";
+    case FileType::Sticker:
+      return string_builder << "Sticker";
+    case FileType::Audio:
+      return string_builder << "Audio";
+    case FileType::Animation:
+      return string_builder << "Animation";
+    case FileType::EncryptedThumbnail:
+      return string_builder << "SecretThumbnail";
+    case FileType::Wallpaper:
+      return string_builder << "Wallpaper";
+    case FileType::VideoNote:
+      return string_builder << "VideoNote";
+    case FileType::SecureDecrypted:
+      return string_builder << "Passport";
+    case FileType::SecureEncrypted:
+      return string_builder << "Passport";
+    case FileType::Background:
+      return string_builder << "Background";
+    case FileType::DocumentAsFile:
+      return string_builder << "DocumentAsFile";
+    case FileType::Ringtone:
+      return string_builder << "NotificationSound";
+    case FileType::CallLog:
+      return string_builder << "CallLog";
+    case FileType::Size:
+    case FileType::None:
+    default:
+      return string_builder << "<invalid>";
+  }
 }
 
 FileDirType get_file_dir_type(FileType file_type) {
@@ -229,11 +264,10 @@ FileDirType get_file_dir_type(FileType file_type) {
 }
 
 bool is_file_big(FileType file_type, int64 expected_size) {
+  if (get_file_type_class(file_type) == FileTypeClass::Photo) {
+    return false;
+  }
   switch (file_type) {
-    case FileType::Thumbnail:
-    case FileType::ProfilePhoto:
-    case FileType::Photo:
-    case FileType::EncryptedThumbnail:
     case FileType::VideoNote:
     case FileType::Ringtone:
     case FileType::CallLog:

@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -11,14 +11,12 @@
 #include "td/telegram/PhotoSize.h"
 #include "td/telegram/Version.h"
 
-#include "td/utils/logging.h"
 #include "td/utils/tl_helpers.h"
 
 namespace td {
 
 template <class StorerT>
 void store(const PhotoSize &photo_size, StorerT &storer) {
-  LOG(DEBUG) << "Store photo size " << photo_size;
   store(photo_size.type, storer);
   store(photo_size.dimensions, storer);
   store(photo_size.size, storer);
@@ -41,7 +39,6 @@ void parse(PhotoSize &photo_size, ParserT &parser) {
     parser.set_error("Wrong PhotoSize type");
     return;
   }
-  LOG(DEBUG) << "Parsed photo size " << photo_size;
 }
 
 template <class StorerT>

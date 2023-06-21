@@ -88,6 +88,9 @@ function(td_set_up_compiler)
   # _FILE_OFFSET_BITS is broken in Android NDK r15, r15b and r17 and doesn't work prior to Android 7.0
   add_definitions(-D_FILE_OFFSET_BITS=64)
 
+  # _GNU_SOURCE might not be defined by g++
+  add_definitions(-D_GNU_SOURCE)
+
   if (CMAKE_SYSTEM_NAME STREQUAL "SunOS")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lsocket -lnsl")
     if (ILLUMOS)
@@ -150,6 +153,10 @@ function(td_set_up_compiler)
   if (CLANG AND (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 3.5))
     # https://stackoverflow.com/questions/26744556/warning-returning-a-captured-reference-from-a-lambda
     add_cxx_compiler_flag("-Wno-return-stack-address")
+  endif()
+
+  if (MINGW)
+    add_cxx_compiler_flag("-ftrack-macro-expansion=0")
   endif()
 
   #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isystem /usr/include/c++/v1")

@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -8,6 +8,7 @@
 
 #include "td/telegram/DialogId.h"
 #include "td/telegram/files/FileId.h"
+#include "td/telegram/files/FileSourceId.h"
 #include "td/telegram/MessageId.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
@@ -31,12 +32,22 @@ class AttachMenuManager final : public Actor {
 
   void init();
 
-  void request_web_view(DialogId dialog_id, UserId bot_user_id, MessageId reply_to_message_id, string &&url,
-                        td_api::object_ptr<td_api::themeParameters> &&theme,
+  void get_web_app(UserId bot_user_id, const string &web_app_short_name,
+                   Promise<td_api::object_ptr<td_api::foundWebApp>> &&promise);
+
+  void reload_web_app(UserId bot_user_id, const string &web_app_short_name, Promise<Unit> &&promise);
+
+  void request_app_web_view(DialogId dialog_id, UserId bot_user_id, string &&web_app_short_name,
+                            string &&start_parameter, const td_api::object_ptr<td_api::themeParameters> &theme,
+                            string &&platform, bool allow_write_access, Promise<string> &&promise);
+
+  void request_web_view(DialogId dialog_id, UserId bot_user_id, MessageId top_thread_message_id,
+                        MessageId reply_to_message_id, string &&url,
+                        td_api::object_ptr<td_api::themeParameters> &&theme, string &&platform,
                         Promise<td_api::object_ptr<td_api::webAppInfo>> &&promise);
 
-  void open_web_view(int64 query_id, DialogId dialog_id, UserId bot_user_id, MessageId reply_to_message_id,
-                     DialogId as_dialog_id);
+  void open_web_view(int64 query_id, DialogId dialog_id, UserId bot_user_id, MessageId top_thread_message_id,
+                     MessageId reply_to_message_id, DialogId as_dialog_id);
 
   void close_web_view(int64 query_id, Promise<Unit> &&promise);
 
@@ -44,9 +55,18 @@ class AttachMenuManager final : public Actor {
 
   void get_attach_menu_bot(UserId user_id, Promise<td_api::object_ptr<td_api::attachmentMenuBot>> &&promise);
 
-  void toggle_bot_is_added_to_attach_menu(UserId user_id, bool is_added, Promise<Unit> &&promise);
+  void reload_attach_menu_bot(UserId user_id, Promise<Unit> &&promise);
+
+  FileSourceId get_attach_menu_bot_file_source_id(UserId user_id);
+
+  FileSourceId get_web_app_file_source_id(UserId user_id, const string &short_name);
+
+  void toggle_bot_is_added_to_attach_menu(UserId user_id, bool is_added, bool allow_write_access,
+                                          Promise<Unit> &&promise);
 
   void get_current_state(vector<td_api::object_ptr<td_api::Update>> &updates) const;
+
+  static string get_attach_menu_bots_database_key();
 
  private:
   static const int32 PING_WEB_VIEW_TIMEOUT = 60;
@@ -81,6 +101,7 @@ class AttachMenuManager final : public Actor {
     bool supports_group_dialogs_ = false;
     bool supports_broadcast_dialogs_ = false;
     bool supports_settings_ = false;
+    bool request_write_access_ = false;
     string name_;
     AttachMenuBotColor name_color_;
     FileId default_icon_file_id_;
@@ -91,7 +112,7 @@ class AttachMenuManager final : public Actor {
     AttachMenuBotColor icon_color_;
     FileId placeholder_file_id_;
 
-    static constexpr uint32 CACHE_VERSION = 1;
+    static constexpr uint32 CACHE_VERSION = 2;
     uint32 cache_version_ = 0;
 
     template <class StorerT>
@@ -117,7 +138,11 @@ class AttachMenuManager final : public Actor {
 
   void schedule_ping_web_view();
 
-  Result<AttachMenuBot> get_attach_menu_bot(tl_object_ptr<telegram_api::attachMenuBot> &&bot) const;
+  void on_get_web_app(UserId bot_user_id, string web_app_short_name,
+                      Result<telegram_api::object_ptr<telegram_api::messages_botApp>> result,
+                      Promise<td_api::object_ptr<td_api::foundWebApp>> promise);
+
+  Result<AttachMenuBot> get_attach_menu_bot(tl_object_ptr<telegram_api::attachMenuBot> &&bot);
 
   td_api::object_ptr<td_api::attachmentMenuBot> get_attachment_menu_bot_object(const AttachMenuBot &bot) const;
 
@@ -127,12 +152,9 @@ class AttachMenuManager final : public Actor {
 
   void send_update_attach_menu_bots() const;
 
-  static string get_attach_menu_bots_database_key();
-
   void save_attach_menu_bots();
 
-  void on_reload_attach_menu_bots(Result<telegram_api::object_ptr<telegram_api::AttachMenuBots>> &&result,
-                                  Promise<Unit> &&promise);
+  void on_reload_attach_menu_bots(Result<telegram_api::object_ptr<telegram_api::AttachMenuBots>> &&result);
 
   void on_get_attach_menu_bot(UserId user_id,
                               Result<telegram_api::object_ptr<telegram_api::attachMenuBotsBot>> &&result,
@@ -144,10 +166,15 @@ class AttachMenuManager final : public Actor {
   bool is_inited_ = false;
   int64 hash_ = 0;
   vector<AttachMenuBot> attach_menu_bots_;
+  FlatHashMap<UserId, FileSourceId, UserIdHash> attach_menu_bot_file_source_ids_;
+  vector<Promise<Unit>> reload_attach_menu_bots_queries_;
+
+  FlatHashMap<UserId, FlatHashMap<string, FileSourceId>, UserIdHash> web_app_file_source_ids_;
 
   struct OpenedWebView {
     DialogId dialog_id_;
     UserId bot_user_id_;
+    MessageId top_thread_message_id_;
     MessageId reply_to_message_id_;
     DialogId as_dialog_id_;
   };

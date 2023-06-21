@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -20,7 +20,7 @@ struct SetNode {
   using public_type = const KeyT;
   using second_type = KeyT;  // TODO: remove second_type?
 
-  KeyT first{};
+  KeyT first;
 
   const KeyT &key() const {
     return first;
@@ -30,11 +30,12 @@ struct SetNode {
     return first;
   }
 
-  SetNode() = default;
+  SetNode() : first() {
+  }
   explicit SetNode(KeyT key) : first(std::move(key)) {
   }
-  SetNode(const SetNode &other) = delete;
-  SetNode &operator=(const SetNode &other) = delete;
+  SetNode(const SetNode &) = delete;
+  SetNode &operator=(const SetNode &) = delete;
   SetNode(SetNode &&other) noexcept {
     *this = std::move(other);
   }
@@ -42,7 +43,7 @@ struct SetNode {
     DCHECK(empty());
     DCHECK(!other.empty());
     first = std::move(other.first);
-    other.first = KeyT{};
+    other.first = KeyT();
   }
   ~SetNode() = default;
 
@@ -71,16 +72,16 @@ struct SetNode<KeyT, typename std::enable_if_t<(sizeof(KeyT) > 28 * sizeof(void 
   struct Impl {
     using second_type = KeyT;
 
-    KeyT first{};
+    KeyT first;
 
     template <class InputKeyT>
     explicit Impl(InputKeyT &&key) : first(std::forward<InputKeyT>(key)) {
       DCHECK(!is_hash_table_key_empty(first));
     }
-    Impl(const Impl &other) = delete;
-    Impl &operator=(const Impl &other) = delete;
-    Impl(Impl &&other) = delete;
-    void operator=(Impl &&other) = delete;
+    Impl(const Impl &) = delete;
+    Impl &operator=(const Impl &) = delete;
+    Impl(Impl &&) = delete;
+    Impl &operator=(Impl &&) = delete;
   };
 
   using public_key_type = KeyT;
@@ -99,7 +100,7 @@ struct SetNode<KeyT, typename std::enable_if_t<(sizeof(KeyT) > 28 * sizeof(void 
     return impl_->first;
   }
 
-  SetNode() {
+  SetNode() : impl_() {
   }
   explicit SetNode(KeyT key) : impl_(td::make_unique<Impl>(std::move(key))) {
   }

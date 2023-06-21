@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -7,13 +7,11 @@
 #pragma once
 
 #include "td/utils/common.h"
+#include "td/utils/HashTableUtils.h"
 #include "td/utils/StringBuilder.h"
-
-#include <functional>
 
 namespace td {
 
-// increase MessageUnsupported::CURRENT_VERSION each time a new message content type is added
 enum class MessageContentType : int32 {
   None = -1,
   Text,
@@ -63,8 +61,17 @@ enum class MessageContentType : int32 {
   InviteToGroupCall,
   ChatSetTheme,
   WebViewDataSent,
-  WebViewDataReceived
+  WebViewDataReceived,
+  GiftPremium,
+  TopicCreate,
+  TopicEdit,
+  SuggestProfilePhoto,
+  WriteAccessAllowed,
+  RequestedDialog,
+  WebViewWriteAccessAllowed,
+  SetBackground
 };
+// increase MessageUnsupported::CURRENT_VERSION each time a new message content type is added
 
 StringBuilder &operator<<(StringBuilder &string_builder, MessageContentType content_type);
 
@@ -81,8 +88,8 @@ bool can_have_message_content_caption(MessageContentType content_type);
 uint64 get_message_content_chain_id(MessageContentType content_type);
 
 struct MessageContentTypeHash {
-  std::size_t operator()(MessageContentType content_type) const {
-    return std::hash<int32>()(static_cast<int32>(content_type));
+  uint32 operator()(MessageContentType content_type) const {
+    return Hash<int32>()(static_cast<int32>(content_type));
   }
 };
 

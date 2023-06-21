@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -21,10 +21,6 @@
 namespace td {
 
 int VERBOSITY_NAME(net_query) = VERBOSITY_NAME(INFO);
-
-int64 NetQuery::get_my_id() {
-  return G()->get_my_id();
-}
 
 void NetQuery::debug(string state, bool may_be_lost) {
   may_be_lost_ = may_be_lost;
@@ -57,7 +53,7 @@ NetQuery::NetQuery(State state, uint64 id, BufferSlice &&query, BufferSlice &&an
   td::unique(chain_ids_);
 
   auto &data = get_data_unsafe();
-  data.my_id_ = get_my_id();
+  data.my_id_ = G()->get_option_integer("my_id");
   data.start_timestamp_ = data.state_timestamp_ = Time::now();
   LOG(INFO) << *this;
   if (stats) {
@@ -66,17 +62,17 @@ NetQuery::NetQuery(State state, uint64 id, BufferSlice &&query, BufferSlice &&an
 }
 
 void NetQuery::on_net_write(size_t size) {
-  if (file_type_ == -1) {
-    return;
+  const auto &callbacks = G()->get_net_stats_file_callbacks();
+  if (static_cast<size_t>(file_type_) < callbacks.size()) {
+    callbacks[file_type_]->on_write(size);
   }
-  G()->get_net_stats_file_callbacks().at(file_type_)->on_write(size);
 }
 
 void NetQuery::on_net_read(size_t size) {
-  if (file_type_ == -1) {
-    return;
+  const auto &callbacks = G()->get_net_stats_file_callbacks();
+  if (static_cast<size_t>(file_type_) < callbacks.size()) {
+    callbacks[file_type_]->on_read(size);
   }
-  G()->get_net_stats_file_callbacks().at(file_type_)->on_read(size);
 }
 
 int32 NetQuery::tl_magic(const BufferSlice &buffer_slice) {
@@ -93,7 +89,7 @@ void NetQuery::set_error(Status status, string source) {
   }
 
   if (begins_with(status.message(), "INPUT_METHOD_INVALID")) {
-    LOG(ERROR) << "Receive INPUT_METHOD_INVALID for query " << format::as_hex_dump<4>(Slice(query_.as_slice()));
+    LOG(ERROR) << "Receive INPUT_METHOD_INVALID for query " << format::as_hex_dump<4>(query_.as_slice());
   }
   if (status.message() == "BOT_METHOD_INVALID") {
     auto id = tl_constructor();

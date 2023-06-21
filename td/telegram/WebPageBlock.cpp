@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -18,6 +18,7 @@
 #include "td/telegram/DocumentsManager.h"
 #include "td/telegram/DocumentsManager.hpp"
 #include "td/telegram/files/FileId.h"
+#include "td/telegram/LinkManager.h"
 #include "td/telegram/Location.h"
 #include "td/telegram/Photo.h"
 #include "td/telegram/Photo.hpp"
@@ -32,6 +33,7 @@
 
 #include "td/utils/algorithm.h"
 #include "td/utils/common.h"
+#include "td/utils/HttpUrl.h"
 #include "td/utils/logging.h"
 #include "td/utils/misc.h"
 #include "td/utils/SliceBuilder.h"
@@ -47,13 +49,15 @@ class RichText;
 struct GetWebPageBlockObjectContext {
   Td *td_ = nullptr;
   Slice base_url_;
+  string real_url_host_;
+  string real_url_rhash_;
 
   bool is_first_pass_ = true;
   bool has_anchor_urls_ = false;
   std::unordered_map<Slice, const RichText *, SliceHash> anchors_;  // anchor -> text
 };
 
-static vector<td_api::object_ptr<td_api::PageBlock>> get_page_block_objects(
+static vector<td_api::object_ptr<td_api::PageBlock>> get_page_blocks_object(
     const vector<unique_ptr<WebPageBlock>> &page_blocks, GetWebPageBlockObjectContext *context) {
   return transform(page_blocks, [context](const unique_ptr<WebPageBlock> &page_block) {
     return page_block->get_page_block_object(context);
@@ -61,7 +65,7 @@ static vector<td_api::object_ptr<td_api::PageBlock>> get_page_block_objects(
 }
 
 class RichText {
-  static vector<td_api::object_ptr<td_api::RichText>> get_rich_text_objects(const vector<RichText> &rich_texts,
+  static vector<td_api::object_ptr<td_api::RichText>> get_rich_texts_object(const vector<RichText> &rich_texts,
                                                                             GetWebPageBlockObjectContext *context) {
     return transform(rich_texts,
                      [context](const RichText &rich_text) { return rich_text.get_rich_text_object(context); });
@@ -147,12 +151,21 @@ class RichText {
             }
           }
         }
+        if (!context->real_url_rhash_.empty() && get_url_host(content) == context->real_url_host_) {
+          if (context->is_first_pass_) {
+            context->has_anchor_urls_ = true;
+          } else {
+            return make_tl_object<td_api::richTextUrl>(
+                texts[0].get_rich_text_object(context),
+                LinkManager::get_instant_view_link(content, context->real_url_rhash_), true);
+          }
+        }
         return make_tl_object<td_api::richTextUrl>(texts[0].get_rich_text_object(context), content,
                                                    web_page_id.is_valid());
       case RichText::Type::EmailAddress:
         return make_tl_object<td_api::richTextEmailAddress>(texts[0].get_rich_text_object(context), content);
       case RichText::Type::Concatenation:
-        return make_tl_object<td_api::richTexts>(get_rich_text_objects(texts, context));
+        return make_tl_object<td_api::richTexts>(get_rich_texts_object(texts, context));
       case RichText::Type::Subscript:
         return make_tl_object<td_api::richTextSubscript>(texts[0].get_rich_text_object(context));
       case RichText::Type::Superscript:
@@ -832,7 +845,7 @@ class WebPageBlockList final : public WebPageBlock {
                                                                                        Context *context) {
     // if label is empty, then Bullet U+2022 is used as a label
     return td_api::make_object<td_api::pageBlockListItem>(item.label.empty() ? "\xE2\x80\xA2" : item.label,
-                                                          get_page_block_objects(item.page_blocks, context));
+                                                          get_page_blocks_object(item.page_blocks, context));
   }
 
  public:
@@ -1291,7 +1304,7 @@ class WebPageBlockEmbeddedPost final : public WebPageBlock {
   td_api::object_ptr<td_api::PageBlock> get_page_block_object(Context *context) const final {
     return make_tl_object<td_api::pageBlockEmbeddedPost>(
         url, author, get_photo_object(context->td_->file_manager_.get(), author_photo), date,
-        get_page_block_objects(page_blocks, context), caption.get_page_block_caption_object(context));
+        get_page_blocks_object(page_blocks, context), caption.get_page_block_caption_object(context));
   }
 
   template <class StorerT>
@@ -1339,7 +1352,7 @@ class WebPageBlockCollage final : public WebPageBlock {
   }
 
   td_api::object_ptr<td_api::PageBlock> get_page_block_object(Context *context) const final {
-    return make_tl_object<td_api::pageBlockCollage>(get_page_block_objects(page_blocks, context),
+    return make_tl_object<td_api::pageBlockCollage>(get_page_blocks_object(page_blocks, context),
                                                     caption.get_page_block_caption_object(context));
   }
 
@@ -1380,7 +1393,7 @@ class WebPageBlockSlideshow final : public WebPageBlock {
   }
 
   td_api::object_ptr<td_api::PageBlock> get_page_block_object(Context *context) const final {
-    return make_tl_object<td_api::pageBlockSlideshow>(get_page_block_objects(page_blocks, context),
+    return make_tl_object<td_api::pageBlockSlideshow>(get_page_blocks_object(page_blocks, context),
                                                       caption.get_page_block_caption_object(context));
   }
 
@@ -1591,7 +1604,7 @@ class WebPageBlockDetails final : public WebPageBlock {
 
   td_api::object_ptr<td_api::PageBlock> get_page_block_object(Context *context) const final {
     return make_tl_object<td_api::pageBlockDetails>(header.get_rich_text_object(context),
-                                                    get_page_block_objects(page_blocks, context), is_open);
+                                                    get_page_blocks_object(page_blocks, context), is_open);
   }
 
   template <class StorerT>
@@ -2046,7 +2059,6 @@ unique_ptr<WebPageBlock> get_web_page_block(Td *td, tl_object_ptr<telegram_api::
       bool is_looped = page_block->loop_;
       auto animations_it = animations.find(page_block->video_id_);
       if (animations_it != animations.end()) {
-        LOG_IF(ERROR, !is_looped) << "Receive non-looped animation";
         return make_unique<WebPageBlockAnimation>(
             animations_it->second, get_page_block_caption(std::move(page_block->caption_), documents), need_autoplay);
       }
@@ -2129,7 +2141,7 @@ unique_ptr<WebPageBlock> get_web_page_block(Td *td, tl_object_ptr<telegram_api::
           LOG(INFO) << "Receive known min " << channel_id;
           return td::make_unique<WebPageBlockChatLink>(td->contacts_manager_->get_channel_title(channel_id),
                                                        *td->contacts_manager_->get_channel_dialog_photo(channel_id),
-                                                       td->contacts_manager_->get_channel_username(channel_id));
+                                                       td->contacts_manager_->get_channel_first_username(channel_id));
         } else {
           bool has_access_hash = (channel->flags_ & telegram_api::channel::ACCESS_HASH_MASK) != 0;
           return td::make_unique<WebPageBlockChatLink>(
@@ -2386,19 +2398,26 @@ vector<unique_ptr<WebPageBlock>> get_web_page_blocks(
   return result;
 }
 
-vector<td_api::object_ptr<td_api::PageBlock>> get_page_block_objects(
-    const vector<unique_ptr<WebPageBlock>> &page_blocks, Td *td, Slice base_url) {
+vector<td_api::object_ptr<td_api::PageBlock>> get_page_blocks_object(
+    const vector<unique_ptr<WebPageBlock>> &page_blocks, Td *td, Slice base_url, Slice real_url) {
   GetWebPageBlockObjectContext context;
   context.td_ = td;
   context.base_url_ = base_url;
-  auto blocks = get_page_block_objects(page_blocks, &context);
-  if (context.anchors_.empty() || !context.has_anchor_urls_) {
+  context.real_url_rhash_ = LinkManager::get_instant_view_link_rhash(real_url);
+  if (!context.real_url_rhash_.empty()) {
+    context.real_url_host_ = get_url_host(LinkManager::get_instant_view_link_url(real_url));
+    if (context.real_url_host_.empty()) {
+      context.real_url_rhash_ = string();
+    }
+  }
+  auto blocks = get_page_blocks_object(page_blocks, &context);
+  if (!context.has_anchor_urls_) {
     return blocks;
   }
 
   context.is_first_pass_ = false;
   context.anchors_.emplace(Slice(), nullptr);  // back to top
-  return get_page_block_objects(page_blocks, &context);
+  return get_page_blocks_object(page_blocks, &context);
 }
 
 }  // namespace td

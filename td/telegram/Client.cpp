@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -98,8 +98,7 @@ class ClientManager::Impl final {
         CHECK(concurrent_scheduler_ == nullptr);
         CHECK(options_.net_query_stats == nullptr);
         options_.net_query_stats = std::make_shared<NetQueryStats>();
-        concurrent_scheduler_ = make_unique<ConcurrentScheduler>();
-        concurrent_scheduler_->init(0);
+        concurrent_scheduler_ = make_unique<ConcurrentScheduler>(0, 0);
         concurrent_scheduler_->start();
       }
       tds_[client_id] =
@@ -249,8 +248,8 @@ class MultiTd final : public Actor {
     auto old_context = set_context(context);
     auto old_tag = set_tag(to_string(td_id));
     td = create_actor<Td>("Td", std::move(callback), options_);
-    set_context(old_context);
-    set_tag(old_tag);
+    set_context(std::move(old_context));
+    set_tag(std::move(old_tag));
   }
 
   void send(ClientManager::ClientId client_id, ClientManager::RequestId request_id,
@@ -354,8 +353,7 @@ class MultiImpl {
   static constexpr int32 ADDITIONAL_THREAD_COUNT = 3;
 
   explicit MultiImpl(std::shared_ptr<NetQueryStats> net_query_stats) {
-    concurrent_scheduler_ = std::make_shared<ConcurrentScheduler>();
-    concurrent_scheduler_->init(ADDITIONAL_THREAD_COUNT);
+    concurrent_scheduler_ = std::make_shared<ConcurrentScheduler>(ADDITIONAL_THREAD_COUNT, 0);
     concurrent_scheduler_->start();
 
     {
@@ -423,6 +421,7 @@ class MultiImpl {
   static std::atomic<uint32> current_id_;
 };
 
+constexpr int32 MultiImpl::ADDITIONAL_THREAD_COUNT;
 std::atomic<uint32> MultiImpl::current_id_{1};
 
 class MultiImplPool {
@@ -654,8 +653,8 @@ Client::Response Client::execute(Request &&request) {
   return response;
 }
 
-Client::Client(Client &&other) noexcept = default;
-Client &Client::operator=(Client &&other) noexcept = default;
+Client::Client(Client &&) noexcept = default;
+Client &Client::operator=(Client &&) noexcept = default;
 Client::~Client() = default;
 
 ClientManager::ClientManager() : impl_(std::make_unique<Impl>()) {
@@ -707,8 +706,8 @@ void ClientManager::set_log_message_callback(int max_verbosity_level, LogMessage
   }
 }
 
-ClientManager::ClientManager(ClientManager &&other) noexcept = default;
-ClientManager &ClientManager::operator=(ClientManager &&other) noexcept = default;
+ClientManager::ClientManager(ClientManager &&) noexcept = default;
+ClientManager &ClientManager::operator=(ClientManager &&) noexcept = default;
 ClientManager::~ClientManager() = default;
 
 ClientManager *ClientManager::get_manager_singleton() {

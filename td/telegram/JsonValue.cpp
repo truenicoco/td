@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -214,6 +214,15 @@ int32 get_json_value_int(telegram_api::object_ptr<telegram_api::JSONValue> &&jso
     return static_cast<int32>(static_cast<const telegram_api::jsonNumber *>(json_value.get())->value_);
   }
   LOG(ERROR) << "Expected Integer as " << name << ", but found " << to_string(json_value);
+  return 0;
+}
+
+int64 get_json_value_long(telegram_api::object_ptr<telegram_api::JSONValue> &&json_value, Slice name) {
+  CHECK(json_value != nullptr);
+  if (json_value->get_id() == telegram_api::jsonString::ID) {
+    return to_integer<int64>(static_cast<const telegram_api::jsonString *>(json_value.get())->value_);
+  }
+  LOG(ERROR) << "Expected Long as " << name << ", but found " << to_string(json_value);
   return 0;
 }
 

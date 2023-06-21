@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -108,6 +108,22 @@ StringBuilder &operator<<(StringBuilder &string_builder, MessageContentType cont
       return string_builder << "WebViewDataSent";
     case MessageContentType::WebViewDataReceived:
       return string_builder << "WebViewDataReceived";
+    case MessageContentType::GiftPremium:
+      return string_builder << "GiftPremium";
+    case MessageContentType::TopicCreate:
+      return string_builder << "TopicCreate";
+    case MessageContentType::TopicEdit:
+      return string_builder << "TopicEdit";
+    case MessageContentType::SuggestProfilePhoto:
+      return string_builder << "SuggestProfilePhoto";
+    case MessageContentType::WriteAccessAllowed:
+      return string_builder << "WriteAccessAllowed";
+    case MessageContentType::RequestedDialog:
+      return string_builder << "ChatShared";
+    case MessageContentType::WebViewWriteAccessAllowed:
+      return string_builder << "WebAppWriteAccessAllowed";
+    case MessageContentType::SetBackground:
+      return string_builder << "SetBackground";
     default:
       UNREACHABLE();
       return string_builder;
@@ -165,6 +181,14 @@ bool is_allowed_media_group_content(MessageContentType content_type) {
     case MessageContentType::ChatSetTheme:
     case MessageContentType::WebViewDataSent:
     case MessageContentType::WebViewDataReceived:
+    case MessageContentType::GiftPremium:
+    case MessageContentType::TopicCreate:
+    case MessageContentType::TopicEdit:
+    case MessageContentType::SuggestProfilePhoto:
+    case MessageContentType::WriteAccessAllowed:
+    case MessageContentType::RequestedDialog:
+    case MessageContentType::WebViewWriteAccessAllowed:
+    case MessageContentType::SetBackground:
       return false;
     default:
       UNREACHABLE();
@@ -230,6 +254,14 @@ bool is_secret_message_content(int32 ttl, MessageContentType content_type) {
     case MessageContentType::ChatSetTheme:
     case MessageContentType::WebViewDataSent:
     case MessageContentType::WebViewDataReceived:
+    case MessageContentType::GiftPremium:
+    case MessageContentType::TopicCreate:
+    case MessageContentType::TopicEdit:
+    case MessageContentType::SuggestProfilePhoto:
+    case MessageContentType::WriteAccessAllowed:
+    case MessageContentType::RequestedDialog:
+    case MessageContentType::WebViewWriteAccessAllowed:
+    case MessageContentType::SetBackground:
       return false;
     default:
       UNREACHABLE();
@@ -288,6 +320,14 @@ bool is_service_message_content(MessageContentType content_type) {
     case MessageContentType::ChatSetTheme:
     case MessageContentType::WebViewDataSent:
     case MessageContentType::WebViewDataReceived:
+    case MessageContentType::GiftPremium:
+    case MessageContentType::TopicCreate:
+    case MessageContentType::TopicEdit:
+    case MessageContentType::SuggestProfilePhoto:
+    case MessageContentType::WriteAccessAllowed:
+    case MessageContentType::RequestedDialog:
+    case MessageContentType::WebViewWriteAccessAllowed:
+    case MessageContentType::SetBackground:
       return true;
     default:
       UNREACHABLE();
@@ -346,6 +386,14 @@ bool can_have_message_content_caption(MessageContentType content_type) {
     case MessageContentType::ChatSetTheme:
     case MessageContentType::WebViewDataSent:
     case MessageContentType::WebViewDataReceived:
+    case MessageContentType::GiftPremium:
+    case MessageContentType::TopicCreate:
+    case MessageContentType::TopicEdit:
+    case MessageContentType::SuggestProfilePhoto:
+    case MessageContentType::WriteAccessAllowed:
+    case MessageContentType::RequestedDialog:
+    case MessageContentType::WebViewWriteAccessAllowed:
+    case MessageContentType::SetBackground:
       return false;
     default:
       UNREACHABLE();
@@ -358,6 +406,7 @@ uint64 get_message_content_chain_id(MessageContentType content_type) {
     case MessageContentType::Animation:
     case MessageContentType::Audio:
     case MessageContentType::Document:
+    case MessageContentType::Invoice:
     case MessageContentType::Photo:
     case MessageContentType::Sticker:
     case MessageContentType::Video:

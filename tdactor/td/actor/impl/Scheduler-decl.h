@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -11,6 +11,7 @@
 #include "td/actor/impl/EventFull-decl.h"
 
 #include "td/utils/Closure.h"
+#include "td/utils/common.h"
 #include "td/utils/FlatHashMap.h"
 #include "td/utils/Heap.h"
 #include "td/utils/List.h"
@@ -38,17 +39,17 @@ extern int VERBOSITY_NAME(actor);
 
 class ActorInfo;
 
-enum class ActorSendType { Immediate, Later, LaterWeak };
+enum class ActorSendType { Immediate, Later };
 
 class Scheduler;
 class SchedulerGuard {
  public:
   explicit SchedulerGuard(Scheduler *scheduler, bool lock = true);
   ~SchedulerGuard();
-  SchedulerGuard(const SchedulerGuard &other) = delete;
-  SchedulerGuard &operator=(const SchedulerGuard &other) = delete;
-  SchedulerGuard(SchedulerGuard &&other) = default;
-  SchedulerGuard &operator=(SchedulerGuard &&other) = delete;
+  SchedulerGuard(const SchedulerGuard &) = delete;
+  SchedulerGuard &operator=(const SchedulerGuard &) = delete;
+  SchedulerGuard(SchedulerGuard &&) = default;
+  SchedulerGuard &operator=(SchedulerGuard &&) = delete;
 
  private:
   MovableValue<bool> is_valid_ = true;
@@ -77,9 +78,7 @@ class Scheduler {
   Scheduler &operator=(Scheduler &&) = delete;
   ~Scheduler();
 
-  void init();
   void init(int32 id, std::vector<std::shared_ptr<MpscPollableQueue<EventFull>>> outbound, Callback *callback);
-  void clear();
 
   int32 sched_id() const;
   int32 sched_count() const;
@@ -100,6 +99,12 @@ class Scheduler {
   void send_to_other_scheduler(int32 sched_id, const ActorId<> &actor_id, Event &&event);
 
   void run_on_scheduler(int32 sched_id, Promise<Unit> action);  // TODO Action
+
+  template <class T>
+  void destroy_on_scheduler(int32 sched_id, T &value);
+
+  template <class... ArgsT>
+  void destroy_on_scheduler(int32 sched_id, ArgsT &...values);
 
   template <ActorSendType send_type, class EventT>
   void send_lambda(ActorRef actor_ref, EventT &&lambda);
@@ -149,6 +154,8 @@ class Scheduler {
  private:
   static void set_scheduler(Scheduler *scheduler);
 
+  void destroy_on_scheduler_impl(int32 sched_id, Promise<Unit> action);
+
   class ServiceActor final : public Actor {
    public:
     void set_queue(std::shared_ptr<MpscPollableQueue<EventFull>> queues);
@@ -162,6 +169,8 @@ class Scheduler {
     void tear_down() final;
   };
   friend class ServiceActor;
+
+  void clear();
 
   void do_event(ActorInfo *actor, Event &&event);
 
@@ -190,8 +199,6 @@ class Scheduler {
 
   template <ActorSendType send_type, class RunFuncT, class EventFuncT>
   void send_impl(const ActorId<> &actor_id, const RunFuncT &run_func, const EventFuncT &event_func);
-
-  void inc_wait_generation();
 
   Timestamp run_timeout();
   void run_mailbox();
@@ -222,7 +229,6 @@ class Scheduler {
   bool has_guard_ = false;
   bool close_flag_ = false;
 
-  uint32 wait_generation_ = 1;
   int32 sched_id_ = 0;
   int32 sched_n_ = 0;
   std::shared_ptr<MpscPollableQueue<EventFull>> inbound_queue_;
@@ -293,5 +299,4 @@ void send_event_later(ActorRef actor_ref, ArgsT &&...args) {
   Scheduler::instance()->send<ActorSendType::Later>(actor_ref, std::forward<ArgsT>(args)...);
 }
 
-void yield_scheduler();
 }  // namespace td

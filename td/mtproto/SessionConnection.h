@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -30,7 +30,6 @@ namespace td {
 extern int VERBOSITY_NAME(mtproto);
 
 namespace mtproto_api {
-
 class rpc_error;
 class new_session_created;
 class bad_msg_notification;
@@ -54,15 +53,14 @@ namespace mtproto {
 class AuthData;
 
 struct MsgInfo {
-  uint64 session_id;
-  int64 message_id;
+  uint64 message_id;
   int32 seq_no;
   size_t size;
 };
 
-inline StringBuilder &operator<<(StringBuilder &stream, const MsgInfo &id) {
-  return stream << "[session_id:" << format::as_hex(id.session_id) << "] [msg_id:" << format::as_hex(id.message_id)
-                << "] [seq_no:" << format::as_hex(id.seq_no) << "]";
+inline StringBuilder &operator<<(StringBuilder &string_builder, const MsgInfo &info) {
+  return string_builder << "[msg_id:" << format::as_hex(info.message_id) << "] [seq_no:" << format::as_hex(info.seq_no)
+                        << "]";
 }
 
 class SessionConnection final
@@ -81,13 +79,13 @@ class SessionConnection final
   unique_ptr<RawConnection> move_as_raw_connection();
 
   // Interface
-  Result<uint64> TD_WARN_UNUSED_RESULT send_query(BufferSlice buffer, bool gzip_flag, int64 message_id = 0,
+  Result<uint64> TD_WARN_UNUSED_RESULT send_query(BufferSlice buffer, bool gzip_flag, uint64 message_id = 0,
                                                   std::vector<uint64> invoke_after_id = {}, bool use_quick_ack = false);
   std::pair<uint64, BufferSlice> encrypted_bind(int64 perm_key, int64 nonce, int32 expires_at);
 
-  void get_state_info(int64 message_id);
-  void resend_answer(int64 message_id);
-  void cancel_answer(int64 message_id);
+  void get_state_info(uint64 message_id);
+  void resend_answer(uint64 message_id);
+  void cancel_answer(uint64 message_id);
   void destroy_key();
 
   void set_online(bool online_flag, bool is_main);
@@ -106,7 +104,7 @@ class SessionConnection final
     virtual void on_auth_key_updated() = 0;
     virtual void on_tmp_auth_key_updated() = 0;
     virtual void on_server_salt_updated() = 0;
-    virtual void on_server_time_difference_updated() = 0;
+    virtual void on_server_time_difference_updated(bool force) = 0;
 
     virtual void on_session_created(uint64 unique_id, uint64 first_id) = 0;
     virtual void on_session_failed(Status status) = 0;
@@ -139,32 +137,31 @@ class SessionConnection final
   bool is_main_ = false;
   bool was_moved_ = false;
 
-  int rtt() const {
-    return max(2, static_cast<int>(raw_connection_->extra().rtt * 1.5 + 1));
+  double rtt() const {
+    return max(2.0, raw_connection_->extra().rtt * 1.5 + 1);
   }
 
-  int32 read_disconnect_delay() const {
-    return online_flag_ ? rtt() * 7 / 2 : 135;
+  double read_disconnect_delay() const {
+    return online_flag_ ? rtt() * 3.5 : 135 + random_delay_;
   }
 
-  int32 ping_disconnect_delay() const {
-    return (online_flag_ && is_main_) ? rtt() * 5 / 2 : 135;
+  double ping_disconnect_delay() const {
+    return online_flag_ && is_main_ ? rtt() * 2.5 : 135 + random_delay_;
   }
 
-  int32 ping_may_delay() const {
-    return online_flag_ ? rtt() / 2 : 30;
+  double ping_may_delay() const {
+    return online_flag_ ? rtt() * 0.5 : 30 + random_delay_;
   }
 
-  int32 ping_must_delay() const {
-    return online_flag_ ? rtt() : 60;
+  double ping_must_delay() const {
+    return online_flag_ ? rtt() : 60 + random_delay_;
   }
 
   double http_max_wait() const {
     return 25.0;  // 25s. Longer could be closed by proxy
   }
-  static constexpr int HTTP_MAX_AFTER = 10;              // 0.01s
-  static constexpr int HTTP_MAX_DELAY = 30;              // 0.03s
-  static constexpr int TEMP_KEY_TIMEOUT = 60 * 60 * 24;  // one day
+  static constexpr int HTTP_MAX_AFTER = 10;  // 0.01s
+  static constexpr int HTTP_MAX_DELAY = 30;  // 0.03s
 
   vector<MtprotoQuery> to_send_;
   vector<int64> to_ack_;
@@ -182,17 +179,22 @@ class SessionConnection final
   // nobody cleans up this map. But it should be really small.
   FlatHashMap<uint64, vector<uint64>> container_to_service_msg_;
 
+  double random_delay_ = 0;
   double last_read_at_ = 0;
   double last_ping_at_ = 0;
   double last_pong_at_ = 0;
-  int64 cur_ping_id_ = 0;
+  double real_last_read_at_ = 0;
+  double real_last_pong_at_ = 0;
+  uint64 cur_ping_id_ = 0;
   uint64 last_ping_message_id_ = 0;
   uint64 last_ping_container_id_ = 0;
+
+  uint64 last_read_size_ = 0;
+  uint64 last_write_size_ = 0;
 
   bool need_destroy_auth_key_ = false;
   bool sent_destroy_auth_key_ = false;
 
-  double wakeup_at_ = 0;
   double flush_packet_at_ = 0;
 
   double last_get_future_salt_at_ = 0;
@@ -201,7 +203,7 @@ class SessionConnection final
   bool connected_flag_ = false;
 
   uint64 container_id_ = 0;
-  int64 main_message_id_ = 0;
+  uint64 main_message_id_ = 0;
   double created_at_ = 0;
 
   unique_ptr<RawConnection> raw_connection_;
@@ -217,6 +219,8 @@ class SessionConnection final
       to = from;
     };
   }
+
+  void reset_server_time_difference(uint64 message_id);
 
   static Status parse_message(TlParser &parser, MsgInfo *info, Slice *packet,
                               bool crypto_flag = true) TD_WARN_UNUSED_RESULT;
@@ -238,7 +242,7 @@ class SessionConnection final
   Status on_packet(const MsgInfo &info, const mtproto_api::pong &pong) TD_WARN_UNUSED_RESULT;
   Status on_packet(const MsgInfo &info, const mtproto_api::future_salts &salts) TD_WARN_UNUSED_RESULT;
 
-  Status on_msgs_state_info(const vector<int64> &ids, Slice info) TD_WARN_UNUSED_RESULT;
+  Status on_msgs_state_info(const vector<int64> &message_ids, Slice info) TD_WARN_UNUSED_RESULT;
   Status on_packet(const MsgInfo &info, const mtproto_api::msgs_state_info &msgs_state_info) TD_WARN_UNUSED_RESULT;
   Status on_packet(const MsgInfo &info, const mtproto_api::msgs_all_info &msgs_all_info) TD_WARN_UNUSED_RESULT;
   Status on_packet(const MsgInfo &info, const mtproto_api::msg_detailed_info &msg_detailed_info) TD_WARN_UNUSED_RESULT;

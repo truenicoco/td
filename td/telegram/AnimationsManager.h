@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -18,9 +18,9 @@
 
 #include "td/utils/buffer.h"
 #include "td/utils/common.h"
-#include "td/utils/FlatHashMap.h"
 #include "td/utils/Promise.h"
 #include "td/utils/Status.h"
+#include "td/utils/WaitFreeHashMap.h"
 
 namespace td {
 
@@ -29,6 +29,11 @@ class Td;
 class AnimationsManager final : public Actor {
  public:
   AnimationsManager(Td *td, ActorShared<> parent);
+  AnimationsManager(const AnimationsManager &) = delete;
+  AnimationsManager &operator=(const AnimationsManager &) = delete;
+  AnimationsManager(AnimationsManager &&) = delete;
+  AnimationsManager &operator=(AnimationsManager &&) = delete;
+  ~AnimationsManager() final;
 
   int32 get_animation_duration(FileId file_id) const;
 
@@ -40,7 +45,8 @@ class AnimationsManager final : public Actor {
 
   tl_object_ptr<telegram_api::InputMedia> get_input_media(FileId file_id,
                                                           tl_object_ptr<telegram_api::InputFile> input_file,
-                                                          tl_object_ptr<telegram_api::InputFile> input_thumbnail) const;
+                                                          tl_object_ptr<telegram_api::InputFile> input_thumbnail,
+                                                          bool has_spoiler) const;
 
   SecretInputMedia get_secret_input_media(FileId animation_file_id,
                                           tl_object_ptr<telegram_api::InputEncryptedFile> input_file,
@@ -54,13 +60,13 @@ class AnimationsManager final : public Actor {
 
   FileId dup_animation(FileId new_id, FileId old_id);
 
-  void merge_animations(FileId new_id, FileId old_id, bool can_delete_old);
+  void merge_animations(FileId new_id, FileId old_id);
 
-  void on_update_animation_search_emojis(string animation_search_emojis);
+  void on_update_animation_search_emojis();
 
-  void on_update_animation_search_provider(string animation_search_provider);
+  void on_update_animation_search_provider();
 
-  void on_update_saved_animations_limit(int32 saved_animations_limit);
+  void on_update_saved_animations_limit();
 
   void reload_saved_animations(bool force);
 
@@ -140,7 +146,7 @@ class AnimationsManager final : public Actor {
   Td *td_;
   ActorShared<> parent_;
 
-  FlatHashMap<FileId, unique_ptr<Animation>, FileIdHash> animations_;
+  WaitFreeHashMap<FileId, unique_ptr<Animation>, FileIdHash> animations_;
 
   int32 saved_animations_limit_ = 200;
   vector<FileId> saved_animation_ids_;

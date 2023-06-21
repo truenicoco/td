@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -19,9 +19,8 @@ namespace td {
 
 template <class StorerT>
 void VideosManager::store_video(FileId file_id, StorerT &storer) const {
-  auto it = videos_.find(file_id);
-  CHECK(it != videos_.end());
-  const Video *video = it->second.get();
+  const Video *video = get_video(file_id);
+  CHECK(video != nullptr);
   bool has_animated_thumbnail = video->animated_thumbnail.file_id.is_valid();
   BEGIN_STORE_FLAGS();
   STORE_FLAG(video->has_stickers);

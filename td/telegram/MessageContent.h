@@ -1,11 +1,12 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 #pragma once
 
+#include "td/telegram/BackgroundInfo.h"
 #include "td/telegram/DialogId.h"
 #include "td/telegram/EncryptedFile.h"
 #include "td/telegram/files/FileId.h"
@@ -20,6 +21,7 @@
 #include "td/telegram/ReplyMarkup.h"
 #include "td/telegram/secret_api.h"
 #include "td/telegram/SecretInputMedia.h"
+#include "td/telegram/StickerType.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
 #include "td/telegram/TopDialogCategory.h"
@@ -38,10 +40,9 @@ namespace td {
 class Dependencies;
 class DialogAction;
 class Game;
+class MultiPromiseActor;
 struct Photo;
 class Td;
-
-class MultiPromiseActor;
 
 // Do not forget to update merge_message_contents when one of the inheritors of this class changes
 class MessageContent {
@@ -98,7 +99,7 @@ unique_ptr<MessageContent> create_contact_registered_message_content();
 
 unique_ptr<MessageContent> create_screenshot_taken_message_content();
 
-unique_ptr<MessageContent> create_chat_set_ttl_message_content(int32 ttl);
+unique_ptr<MessageContent> create_chat_set_ttl_message_content(int32 ttl, UserId from_user_id);
 
 Result<InputMessageContent> get_input_message_content(
     DialogId dialog_id, tl_object_ptr<td_api::InputMessageContent> &&input_message_content, Td *td, bool is_premium);
@@ -113,7 +114,7 @@ tl_object_ptr<telegram_api::InputMedia> get_input_media(const MessageContent *co
                                                         tl_object_ptr<telegram_api::InputFile> input_file,
                                                         tl_object_ptr<telegram_api::InputFile> input_thumbnail,
                                                         FileId file_id, FileId thumbnail_file_id, int32 ttl,
-                                                        bool force);
+                                                        const string &emoji, bool force);
 
 tl_object_ptr<telegram_api::InputMedia> get_input_media(const MessageContent *content, Td *td, int32 ttl,
                                                         const string &emoji, bool force);
@@ -131,13 +132,19 @@ bool update_opened_message_content(MessageContent *content);
 
 int32 get_message_content_index_mask(const MessageContent *content, const Td *td, bool is_outgoing);
 
+StickerType get_message_content_sticker_type(const Td *td, const MessageContent *content);
+
 MessageId get_message_content_pinned_message_id(const MessageContent *content);
+
+BackgroundInfo get_message_content_background_info(const MessageContent *content);
 
 string get_message_content_theme_name(const MessageContent *content);
 
 FullMessageId get_message_content_replied_message_id(DialogId dialog_id, const MessageContent *content);
 
 std::pair<InputGroupCallId, bool> get_message_content_group_call_info(const MessageContent *content);
+
+UserId get_message_content_contact_user_id(const MessageContent *content);
 
 vector<UserId> get_message_content_added_user_ids(const MessageContent *content);
 
@@ -188,7 +195,7 @@ unique_ptr<MessageContent> get_secret_message_content(
 unique_ptr<MessageContent> get_message_content(Td *td, FormattedText message_text,
                                                tl_object_ptr<telegram_api::MessageMedia> &&media_ptr,
                                                DialogId owner_dialog_id, bool is_content_read, UserId via_bot_user_id,
-                                               int32 *ttl, bool *disable_web_page_preview);
+                                               int32 *ttl, bool *disable_web_page_preview, const char *source);
 
 enum class MessageContentDupType : int32 { Send, SendViaBot, Forward, Copy, ServerCopy };
 
@@ -210,9 +217,15 @@ const FormattedText *get_message_content_text(const MessageContent *content);
 
 const FormattedText *get_message_content_caption(const MessageContent *content);
 
+bool get_message_content_has_spoiler(const MessageContent *content);
+
+void set_message_content_has_spoiler(MessageContent *content, bool has_spoiler);
+
 int32 get_message_content_duration(const MessageContent *content, const Td *td);
 
 int32 get_message_content_media_duration(const MessageContent *content, const Td *td);
+
+const Photo *get_message_content_photo(const MessageContent *content);
 
 FileId get_message_content_upload_file_id(const MessageContent *content);
 
@@ -225,6 +238,12 @@ FileId get_message_content_thumbnail_file_id(const MessageContent *content, cons
 vector<FileId> get_message_content_file_ids(const MessageContent *content, const Td *td);
 
 string get_message_content_search_text(const Td *td, const MessageContent *content);
+
+bool update_message_content_extended_media(MessageContent *content,
+                                           telegram_api::object_ptr<telegram_api::MessageExtendedMedia> extended_media,
+                                           DialogId owner_dialog_id, Td *td);
+
+bool need_poll_message_content_extended_media(const MessageContent *content);
 
 void get_message_content_animated_emoji_click_sticker(const MessageContent *content, FullMessageId full_message_id,
                                                       Td *td, Promise<td_api::object_ptr<td_api::sticker>> &&promise);
@@ -240,9 +259,14 @@ void update_expired_message_content(unique_ptr<MessageContent> &content);
 
 void update_failed_to_send_message_content(Td *td, unique_ptr<MessageContent> &content);
 
-void add_message_content_dependencies(Dependencies &dependencies, const MessageContent *message_content);
+void add_message_content_dependencies(Dependencies &dependencies, const MessageContent *message_content, bool is_bot);
+
+void update_forum_topic_info_by_service_message_content(Td *td, const MessageContent *content, DialogId dialog_id,
+                                                        MessageId top_thread_message_id);
 
 void on_sent_message_content(Td *td, const MessageContent *content);
+
+void move_message_content_sticker_set_to_top(Td *td, const MessageContent *content);
 
 bool is_unsent_animated_emoji_click(Td *td, DialogId dialog_id, const DialogAction &action);
 
@@ -251,5 +275,11 @@ void init_stickers_manager(Td *td);
 void on_dialog_used(TopDialogCategory category, DialogId dialog_id, int32 date);
 
 void update_used_hashtags(Td *td, const MessageContent *content);
+
+void recognize_message_content_speech(Td *td, const MessageContent *content, FullMessageId full_message_id,
+                                      Promise<Unit> &&promise);
+
+void rate_message_content_speech_recognition(Td *td, const MessageContent *content, FullMessageId full_message_id,
+                                             bool is_good, Promise<Unit> &&promise);
 
 }  // namespace td

@@ -2,7 +2,7 @@ if ((CMAKE_MAJOR_VERSION LESS 3) OR (CMAKE_VERSION VERSION_LESS "3.0.2"))
   message(FATAL_ERROR "CMake >= 3.0.2 is required")
 endif()
 
-option(TDUTILS_MIME_TYPE "Generate mime types conversion; requires gperf" ON)
+option(TDUTILS_MIME_TYPE "Generate MIME types conversion; requires gperf" ON)
 
 if (NOT DEFINED CMAKE_INSTALL_LIBDIR)
   set(CMAKE_INSTALL_LIBDIR "lib")
@@ -87,6 +87,7 @@ set(TDUTILS_SOURCE
 
   ${TDMIME_AUTO}
 
+  td/utils/AsyncFileLog.cpp
   td/utils/base64.cpp
   td/utils/BigNum.cpp
   td/utils/buffer.cpp
@@ -138,6 +139,7 @@ set(TDUTILS_SOURCE
   td/utils/port/IPAddress.h
   td/utils/port/IoSlice.h
   td/utils/port/MemoryMapping.h
+  td/utils/port/Mutex.h
   td/utils/port/path.h
   td/utils/port/platform.h
   td/utils/port/Poll.h
@@ -178,6 +180,7 @@ set(TDUTILS_SOURCE
   td/utils/AesCtrByteFlow.h
   td/utils/algorithm.h
   td/utils/as.h
+  td/utils/AsyncFileLog.h
   td/utils/AtomicRead.h
   td/utils/base64.h
   td/utils/benchmark.h
@@ -289,10 +292,13 @@ set(TDUTILS_SOURCE
   td/utils/uint128.h
   td/utils/unicode.h
   td/utils/unique_ptr.h
+  td/utils/unique_value_ptr.h
   td/utils/utf8.h
   td/utils/Variant.h
   td/utils/VectorQueue.h
   td/utils/WaitFreeHashMap.h
+  td/utils/WaitFreeHashSet.h
+  td/utils/WaitFreeVector.h
 )
 
 if (TDUTILS_MIME_TYPE)
@@ -334,10 +340,11 @@ set(TDUTILS_TEST_SOURCE
   ${CMAKE_CURRENT_SOURCE_DIR}/test/StealingQueue.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test/variant.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test/WaitFreeHashMap.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test/WaitFreeHashSet.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test/WaitFreeVector.cpp
   PARENT_SCOPE
 )
 
-#RULES
 #LIBRARIES
 add_library(tdutils STATIC ${TDUTILS_SOURCE})
 
@@ -395,7 +402,8 @@ if (ANDROID)
 endif()
 
 if (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
-  target_link_libraries(tdutils PUBLIC /usr/pkg/gcc5/i486--netbsdelf/lib/libatomic.so)
+  target_link_directories(tdutils PUBLIC /usr/pkg/gcc12/x86_64--netbsd/lib /usr/pkg/gcc12/i486--netbsdelf/lib)
+  target_link_libraries(tdutils PUBLIC atomic)
 endif()
 
 install(TARGETS tdutils EXPORT TdTargets

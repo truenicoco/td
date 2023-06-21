@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -19,6 +19,7 @@
 #include "td/telegram/NotificationType.h"
 #include "td/telegram/Photo.h"
 #include "td/telegram/td_api.h"
+#include "td/telegram/UserId.h"
 
 #include "td/actor/actor.h"
 #include "td/actor/MultiTimeout.h"
@@ -107,8 +108,6 @@ class NotificationManager final : public Actor {
   void on_notification_default_delay_changed();
 
   void on_disable_contact_registered_notifications_changed();
-
-  void on_get_disable_contact_registered_notifications(bool is_disabled);
 
   void process_push_notification(string payload, Promise<Unit> &&user_promise);
 
@@ -336,6 +335,8 @@ class NotificationManager final : public Actor {
   void run_contact_registered_notifications_sync();
 
   void on_contact_registered_notifications_sync(bool is_disabled, Result<Unit> result);
+
+  void on_get_disable_contact_registered_notifications(bool is_disabled, Promise<Unit> &&promise);
 
   void save_announcement_ids();
 

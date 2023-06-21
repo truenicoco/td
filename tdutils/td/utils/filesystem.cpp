@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -133,7 +133,7 @@ static string clean_filename_part(Slice name, int max_length) {
   int size = 0;
   for (auto *it = name.ubegin(); it != name.uend() && size < max_length;) {
     uint32 code;
-    it = next_utf8_unsafe(it, &code, "clean_filename_part");
+    it = next_utf8_unsafe(it, &code);
     if (!is_ok(code)) {
       if (prepare_search_character(code) == 0) {
         continue;

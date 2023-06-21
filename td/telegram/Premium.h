@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -30,10 +30,13 @@ void click_premium_subscription_button(Td *td, Promise<Unit> &&promise);
 
 void get_premium_state(Td *td, Promise<td_api::object_ptr<td_api::premiumState>> &&promise);
 
-void can_purchase_premium(Td *td, Promise<Unit> &&promise);
+void can_purchase_premium(Td *td, td_api::object_ptr<td_api::StorePaymentPurpose> &&purpose, Promise<Unit> &&promise);
 
-void assign_app_store_transaction(Td *td, const string &receipt, bool is_restore, Promise<Unit> &&promise);
+void assign_app_store_transaction(Td *td, const string &receipt,
+                                  td_api::object_ptr<td_api::StorePaymentPurpose> &&purpose, Promise<Unit> &&promise);
 
-void assign_play_market_transaction(Td *td, const string &purchase_token, Promise<Unit> &&promise);
+void assign_play_market_transaction(Td *td, const string &package_name, const string &store_product_id,
+                                    const string &purchase_token,
+                                    td_api::object_ptr<td_api::StorePaymentPurpose> &&purpose, Promise<Unit> &&promise);
 
 }  // namespace td

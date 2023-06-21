@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -45,7 +45,7 @@ void PhoneNumberManager::send_new_send_code_query(uint64 query_id, const telegra
 
 void PhoneNumberManager::set_phone_number(uint64 query_id, string phone_number, Settings settings) {
   if (phone_number.empty()) {
-    return on_query_error(query_id, Status::Error(400, "Phone number can't be empty"));
+    return on_query_error(query_id, Status::Error(400, "Phone number must be non-empty"));
   }
 
   switch (type_) {
@@ -64,10 +64,10 @@ void PhoneNumberManager::set_phone_number(uint64 query_id, string phone_number, 
 void PhoneNumberManager::set_phone_number_and_hash(uint64 query_id, string hash, string phone_number,
                                                    Settings settings) {
   if (phone_number.empty()) {
-    return on_query_error(query_id, Status::Error(400, "Phone number can't be empty"));
+    return on_query_error(query_id, Status::Error(400, "Phone number must be non-empty"));
   }
   if (hash.empty()) {
-    return on_query_error(query_id, Status::Error(400, "Hash can't be empty"));
+    return on_query_error(query_id, Status::Error(400, "Hash must be non-empty"));
   }
 
   switch (type_) {
@@ -209,9 +209,23 @@ void PhoneNumberManager::on_send_code_result(NetQueryPtr &result) {
   if (r_sent_code.is_error()) {
     return on_query_error(r_sent_code.move_as_error());
   }
-  auto sent_code = r_sent_code.move_as_ok();
+  auto sent_code_ptr = r_sent_code.move_as_ok();
+  auto sent_code_id = sent_code_ptr->get_id();
+  if (sent_code_id != telegram_api::auth_sentCode::ID) {
+    CHECK(sent_code_id == telegram_api::auth_sentCodeSuccess::ID);
+    return on_query_error(Status::Error(500, "Receive invalid response"));
+  }
+  auto sent_code = telegram_api::move_object_as<telegram_api::auth_sentCode>(sent_code_ptr);
 
   LOG(INFO) << "Receive " << to_string(sent_code);
+
+  switch (sent_code->type_->get_id()) {
+    case telegram_api::auth_sentCodeTypeSetUpEmailRequired::ID:
+    case telegram_api::auth_sentCodeTypeEmailCode::ID:
+      return on_query_error(Status::Error(500, "Receive incorrect response"));
+    default:
+      break;
+  }
 
   send_code_helper_.on_sent_code(std::move(sent_code));
 

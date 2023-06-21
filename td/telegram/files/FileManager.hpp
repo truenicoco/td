@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -224,9 +224,9 @@ FileId FileManager::parse_file(ParserT &parser) {
           if (expected_size < 0) {
             expected_size += static_cast<int64>(1) << 32;
           }
+          int32 zero;
+          parse(zero, parser);
         }
-        int32 zero;
-        parse(zero, parser);
         DialogId owner_dialog_id;
         if (parser.version() >= static_cast<int32>(Version::StoreFileOwnerId)) {
           parse(owner_dialog_id, parser);
@@ -240,7 +240,7 @@ FileId FileManager::parse_file(ParserT &parser) {
           if (file_id.empty()) {
             return register_empty(full_generated_location.file_type_);
           }
-          auto download_file_id = dup_file_id(file_id);
+          auto download_file_id = dup_file_id(file_id, "parse_download_file_id");
           full_generated_location.conversion_ = PSTRING() << "#file_id#" << download_file_id.get();
         }
 

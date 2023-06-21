@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -24,6 +24,8 @@
 #include "td/utils/FlatHashSet.h"
 #include "td/utils/Promise.h"
 #include "td/utils/Status.h"
+#include "td/utils/WaitFreeHashMap.h"
+#include "td/utils/WaitFreeHashSet.h"
 
 #include <utility>
 
@@ -95,10 +97,10 @@ class PollManager final : public Actor {
 
  private:
   struct PollOption {
-    string text;
-    string data;
-    int32 voter_count = 0;
-    bool is_chosen = false;
+    string text_;
+    string data_;
+    int32 voter_count_ = 0;
+    bool is_chosen_ = false;
 
     template <class StorerT>
     void store(StorerT &storer) const;
@@ -107,20 +109,20 @@ class PollManager final : public Actor {
   };
 
   struct Poll {
-    string question;
-    vector<PollOption> options;
-    vector<UserId> recent_voter_user_ids;
-    FormattedText explanation;
-    int32 total_voter_count = 0;
-    int32 correct_option_id = -1;
-    int32 open_period = 0;
-    int32 close_date = 0;
-    bool is_anonymous = true;
-    bool allow_multiple_answers = false;
-    bool is_quiz = false;
-    bool is_closed = false;
-    bool is_updated_after_close = false;
-    mutable bool was_saved = false;
+    string question_;
+    vector<PollOption> options_;
+    vector<UserId> recent_voter_user_ids_;
+    FormattedText explanation_;
+    int32 total_voter_count_ = 0;
+    int32 correct_option_id_ = -1;
+    int32 open_period_ = 0;
+    int32 close_date_ = 0;
+    bool is_anonymous_ = true;
+    bool allow_multiple_answers_ = false;
+    bool is_quiz_ = false;
+    bool is_closed_ = false;
+    bool is_updated_after_close_ = false;
+    mutable bool was_saved_ = false;
 
     template <class StorerT>
     void store(StorerT &storer) const;
@@ -129,10 +131,10 @@ class PollManager final : public Actor {
   };
 
   struct PollOptionVoters {
-    vector<UserId> voter_user_ids;
-    string next_offset;
-    vector<Promise<std::pair<int32, vector<UserId>>>> pending_queries;
-    bool was_invalidated = false;  // the list needs to be invalidated when voters are changed
+    vector<UserId> voter_user_ids_;
+    string next_offset_;
+    vector<Promise<std::pair<int32, vector<UserId>>>> pending_queries_;
+    bool was_invalidated_ = false;  // the list needs to be invalidated when voters are changed
   };
 
   static constexpr int32 MAX_GET_POLL_VOTERS = 50;  // server side limit
@@ -213,6 +215,9 @@ class PollManager final : public Actor {
   void do_stop_poll(PollId poll_id, FullMessageId full_message_id, unique_ptr<ReplyMarkup> &&reply_markup,
                     uint64 log_event_id, Promise<Unit> &&promise);
 
+  void on_stop_poll_finished(PollId poll_id, FullMessageId full_message_id, uint64 log_event_id, Result<Unit> &&result,
+                             Promise<Unit> &&promise);
+
   void forget_local_poll(PollId poll_id);
 
   MultiTimeout update_poll_timeout_{"UpdatePollTimeout"};
@@ -221,10 +226,10 @@ class PollManager final : public Actor {
 
   Td *td_;
   ActorShared<> parent_;
-  FlatHashMap<PollId, unique_ptr<Poll>, PollIdHash> polls_;
+  WaitFreeHashMap<PollId, unique_ptr<Poll>, PollIdHash> polls_;
 
-  FlatHashMap<PollId, FlatHashSet<FullMessageId, FullMessageIdHash>, PollIdHash> server_poll_messages_;
-  FlatHashMap<PollId, FlatHashSet<FullMessageId, FullMessageIdHash>, PollIdHash> other_poll_messages_;
+  WaitFreeHashMap<PollId, WaitFreeHashSet<FullMessageId, FullMessageIdHash>, PollIdHash> server_poll_messages_;
+  WaitFreeHashMap<PollId, WaitFreeHashSet<FullMessageId, FullMessageIdHash>, PollIdHash> other_poll_messages_;
 
   struct PendingPollAnswer {
     vector<string> options_;

@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -58,6 +58,9 @@ PrivacyManager::UserPrivacySetting::UserPrivacySetting(const telegram_api::Priva
     case telegram_api::privacyKeyAddedByPhone::ID:
       type_ = Type::FindByPhoneNumber;
       break;
+    case telegram_api::privacyKeyVoiceMessages::ID:
+      type_ = Type::VoiceMessages;
+      break;
     default:
       UNREACHABLE();
       type_ = Type::UserStatus;
@@ -82,6 +85,8 @@ tl_object_ptr<td_api::UserPrivacySetting> PrivacyManager::UserPrivacySetting::ge
       return make_tl_object<td_api::userPrivacySettingShowPhoneNumber>();
     case Type::FindByPhoneNumber:
       return make_tl_object<td_api::userPrivacySettingAllowFindingByPhoneNumber>();
+    case Type::VoiceMessages:
+      return make_tl_object<td_api::userPrivacySettingAllowPrivateVoiceAndVideoNoteMessages>();
     default:
       UNREACHABLE();
       return nullptr;
@@ -105,6 +110,8 @@ tl_object_ptr<telegram_api::InputPrivacyKey> PrivacyManager::UserPrivacySetting:
       return make_tl_object<telegram_api::inputPrivacyKeyPhoneNumber>();
     case Type::FindByPhoneNumber:
       return make_tl_object<telegram_api::inputPrivacyKeyAddedByPhone>();
+    case Type::VoiceMessages:
+      return make_tl_object<telegram_api::inputPrivacyKeyVoiceMessages>();
     default:
       UNREACHABLE();
       return nullptr;
@@ -136,6 +143,9 @@ PrivacyManager::UserPrivacySetting::UserPrivacySetting(const td_api::UserPrivacy
       break;
     case td_api::userPrivacySettingAllowFindingByPhoneNumber::ID:
       type_ = Type::FindByPhoneNumber;
+      break;
+    case td_api::userPrivacySettingAllowPrivateVoiceAndVideoNoteMessages::ID:
+      type_ = Type::VoiceMessages;
       break;
     default:
       UNREACHABLE();
@@ -297,7 +307,7 @@ Result<PrivacyManager::UserPrivacySettingRule> PrivacyManager::UserPrivacySettin
   auto td = G()->td().get_actor_unsafe();
   for (auto user_id : result.user_ids_) {
     if (!td->contacts_manager_->have_user(user_id)) {
-      return Status::Error(500, "Got inaccessible user from the server");
+      return Status::Error(500, "Receive inaccessible user from the server");
     }
   }
   for (auto chat_id_int : result.chat_ids_) {
@@ -307,7 +317,7 @@ Result<PrivacyManager::UserPrivacySettingRule> PrivacyManager::UserPrivacySettin
       ChannelId channel_id(chat_id_int);
       dialog_id = DialogId(channel_id);
       if (!td->contacts_manager_->have_channel(channel_id)) {
-        return Status::Error(500, "Got inaccessible chat from the server");
+        return Status::Error(500, "Receive inaccessible chat from the server");
       }
     }
     td->messages_manager_->force_create_dialog(dialog_id, "UserPrivacySettingRule");
@@ -340,7 +350,7 @@ vector<int64> PrivacyManager::UserPrivacySettingRule::chat_ids_as_dialog_ids() c
       CHECK(td->contacts_manager_->have_channel(channel_id));
     }
     CHECK(td->messages_manager_->have_dialog(dialog_id));
-    result.push_back(dialog_id.get());
+    result.push_back(td->messages_manager_->get_chat_id_object(dialog_id, "UserPrivacySettingRule"));
   }
   return result;
 }

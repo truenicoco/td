@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -14,9 +14,7 @@
 #include "td/utils/tests.h"
 
 TEST(MultiTimeout, bug) {
-  td::ConcurrentScheduler sched;
-  int threads_n = 0;
-  sched.init(threads_n);
+  td::ConcurrentScheduler sched(0, 0);
 
   sched.start();
   td::unique_ptr<td::MultiTimeout> multi_timeout;
@@ -91,9 +89,7 @@ class TimeoutManager final : public td::Actor {
 td::int32 TimeoutManager::count;
 
 TEST(MultiTimeout, Destroy) {
-  td::ConcurrentScheduler sched;
-  int threads_n = 0;
-  sched.init(threads_n);
+  td::ConcurrentScheduler sched(0, 0);
 
   auto timeout_manager = sched.create_actor_unsafe<TimeoutManager>(0, "TimeoutManager");
   TimeoutManager *manager = timeout_manager.get().get_actor_unsafe();

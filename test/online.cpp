@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -23,6 +23,7 @@
 #include "td/utils/port/signals.h"
 #include "td/utils/Promise.h"
 #include "td/utils/Random.h"
+#include "td/utils/tests.h"
 
 #include <iostream>
 #include <map>
@@ -220,37 +221,31 @@ class InitTask : public Task {
  private:
   Options options_;
   td::Promise<> promise_;
-  bool start_flag_{false};
 
   void start_up() override {
-    send_query(td::make_tl_object<td::td_api::getAuthorizationState>(),
-               [this](auto res) { this->process_authorization_state(res.move_as_ok()); });
+    send_query(td::make_tl_object<td::td_api::getOption>("version"),
+               [](auto res) { LOG(INFO) << td::td_api::to_string(res.ok()); });
   }
   void process_authorization_state(td::tl_object_ptr<td::td_api::Object> authorization_state) {
-    start_flag_ = true;
     td::tl_object_ptr<td::td_api::Function> function;
     switch (authorization_state->get_id()) {
-      case td::td_api::authorizationStateWaitEncryptionKey::ID:
-        send(td::make_tl_object<td::td_api::checkDatabaseEncryptionKey>());
-        break;
       case td::td_api::authorizationStateReady::ID:
         promise_.set_value({});
         stop();
         break;
       case td::td_api::authorizationStateWaitTdlibParameters::ID: {
-        auto parameters = td::td_api::make_object<td::td_api::tdlibParameters>();
-        parameters->use_test_dc_ = true;
-        parameters->database_directory_ = options_.name + TD_DIR_SLASH;
-        parameters->use_message_database_ = true;
-        parameters->use_secret_chats_ = true;
-        parameters->api_id_ = options_.api_id;
-        parameters->api_hash_ = options_.api_hash;
-        parameters->system_language_code_ = "en";
-        parameters->device_model_ = "Desktop";
-        parameters->application_version_ = "tdclient-test";
-        parameters->ignore_file_names_ = false;
-        parameters->enable_storage_optimizer_ = true;
-        send(td::td_api::make_object<td::td_api::setTdlibParameters>(std::move(parameters)));
+        auto request = td::td_api::make_object<td::td_api::setTdlibParameters>();
+        request->use_test_dc_ = true;
+        request->database_directory_ = options_.name + TD_DIR_SLASH;
+        request->use_message_database_ = true;
+        request->use_secret_chats_ = true;
+        request->api_id_ = options_.api_id;
+        request->api_hash_ = options_.api_hash;
+        request->system_language_code_ = "en";
+        request->device_model_ = "Desktop";
+        request->application_version_ = "tdclient-test";
+        request->enable_storage_optimizer_ = true;
+        send(std::move(request));
         break;
       }
       default:
@@ -270,9 +265,6 @@ class InitTask : public Task {
     });
   }
   void process_update(std::shared_ptr<TestClient::Update> update) override {
-    if (!start_flag_) {
-      return;
-    }
     if (!update->object) {
       return;
     }
@@ -329,7 +321,7 @@ class UploadFile : public Task {
     auto r_id = read_file(id_path_);
     if (r_id.is_ok() && r_id.ok().size() > 10) {
       auto id = r_id.move_as_ok();
-      LOG(ERROR) << "Got file from cache";
+      LOG(ERROR) << "Receive file from cache";
       Result res;
       res.content = std::move(content_);
       res.remote_id = id.as_slice().str();
@@ -441,16 +433,16 @@ class TestDownloadFile : public Task {
       begin = end;
     }
 
-    random_shuffle(as_mutable_span(ranges_), rnd);
+    rand_shuffle(as_mutable_span(ranges_), rnd);
     start_chunk();
   }
 
-  void got_chunk(const td_api::file &file) {
-    LOG(ERROR) << "Got chunk";
+  void on_get_chunk(const td_api::file &file) {
+    LOG(ERROR) << "Receive chunk";
     auto range = ranges_.back();
-    std::string got_chunk(range.end - range.begin, '\0');
-    FileFd::open(file.local_->path_, FileFd::Flags::Read).move_as_ok().pread(got_chunk, range.begin).ensure();
-    CHECK(got_chunk == as_slice(content_).substr(range.begin, range.end - range.begin));
+    std::string received_chunk(range.end - range.begin, '\0');
+    FileFd::open(file.local_->path_, FileFd::Flags::Read).move_as_ok().pread(received_chunk, range.begin).ensure();
+    CHECK(received_chunk == as_slice(content_).substr(range.begin, range.end - range.begin));
     ranges_.pop_back();
     if (ranges_.empty()) {
       promise_.set_value(Unit{});
@@ -463,7 +455,7 @@ class TestDownloadFile : public Task {
     send_query(td::make_tl_object<td::td_api::downloadFile>(
                    file_id_, 1, static_cast<int64>(ranges_.back().begin),
                    static_cast<int64>(ranges_.back().end - ranges_.back().begin), true),
-               [this](auto res) { got_chunk(*res.ok()); });
+               [this](auto res) { on_get_chunk(*res.ok()); });
   }
 };
 
@@ -621,8 +613,7 @@ int main(int argc, char **argv) {
   }
   SET_VERBOSITY_LEVEL(new_verbosity_level);
 
-  td::ConcurrentScheduler sched;
-  sched.init(4);
+  td::ConcurrentScheduler sched(4, 0);
   sched.create_actor_unsafe<TestTd>(0, "TestTd", std::move(test_options)).release();
   sched.start();
   while (sched.run_main(10)) {

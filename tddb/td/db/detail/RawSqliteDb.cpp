@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -21,8 +21,8 @@ namespace detail {
 
 static std::atomic<bool> was_database_destroyed{false};
 
-Status RawSqliteDb::last_error(sqlite3 *db, CSlice path) {
-  return Status::Error(PSLICE() << Slice(sqlite3_errmsg(db)) << " for database \"" << path << '"');
+Status RawSqliteDb::last_error(tdsqlite3 *db, CSlice path) {
+  return Status::Error(PSLICE() << Slice(tdsqlite3_errmsg(db)) << " for database \"" << path << '"');
 }
 
 Status RawSqliteDb::destroy(Slice path) {
@@ -38,7 +38,7 @@ Status RawSqliteDb::destroy(Slice path) {
 
 Status RawSqliteDb::last_error() {
   //If database was corrupted, try to delete it.
-  auto code = sqlite3_errcode(db_);
+  auto code = tdsqlite3_errcode(db_);
   if (code == SQLITE_CORRUPT) {
     was_database_destroyed.store(true, std::memory_order_relaxed);
     destroy(path_).ignore();
@@ -52,7 +52,7 @@ bool RawSqliteDb::was_any_database_destroyed() {
 }
 
 RawSqliteDb::~RawSqliteDb() {
-  auto rc = sqlite3_close(db_);
+  auto rc = tdsqlite3_close(db_);
   LOG_IF(FATAL, rc != SQLITE_OK) << last_error(db_, path());
 }
 

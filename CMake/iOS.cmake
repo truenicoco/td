@@ -65,7 +65,7 @@ set (IOS_PLATFORM ${IOS_PLATFORM} CACHE STRING "Type of iOS Platform")
 # Check the platform selection and setup for developer root
 if (IOS_PLATFORM STREQUAL "OS")
     set (IOS_PLATFORM_LOCATION "iPhoneOS.platform")
-    set (XCODE_IOS_PLATFORM iphoneos)
+    set (XCODE_IOS_PLATFORM ios)
 
     # This causes the installers to properly locate the output libraries
     set (CMAKE_XCODE_EFFECTIVE_PLATFORMS "-iphoneos")
@@ -74,7 +74,7 @@ if (IOS_PLATFORM STREQUAL "OS")
 elseif (IOS_PLATFORM STREQUAL "SIMULATOR")
     set (SIMULATOR_FLAG true)
     set (IOS_PLATFORM_LOCATION "iPhoneSimulator.platform")
-    set (XCODE_IOS_PLATFORM iphonesimulator)
+    set (XCODE_IOS_PLATFORM ios-simulator)
 
     # This causes the installers to properly locate the output libraries
     set (CMAKE_XCODE_EFFECTIVE_PLATFORMS "-iphonesimulator")
@@ -91,7 +91,7 @@ elseif (IOS_PLATFORM STREQUAL "WATCHOS")
 elseif (IOS_PLATFORM STREQUAL "WATCHSIMULATOR")
     set (SIMULATOR_FLAG true)
     set (IOS_PLATFORM_LOCATION "WatchSimulator.platform")
-    set (XCODE_IOS_PLATFORM watchsimulator)
+    set (XCODE_IOS_PLATFORM watchos-simulator)
 
     # This causes the installers to properly locate the output libraries
     set (CMAKE_XCODE_EFFECTIVE_PLATFORMS "-watchsimulator")
@@ -108,7 +108,7 @@ elseif (IOS_PLATFORM STREQUAL "TVOS")
 elseif (IOS_PLATFORM STREQUAL "TVSIMULATOR")
     set (SIMULATOR_FLAG true)
     set (IOS_PLATFORM_LOCATION "AppleTvSimulator.platform")
-    set (XCODE_IOS_PLATFORM tvsimulator)
+    set (XCODE_IOS_PLATFORM tvos-simulator)
 
     # This causes the installers to properly locate the output libraries
     set (CMAKE_XCODE_EFFECTIVE_PLATFORMS "-tvsimulator")
@@ -136,12 +136,9 @@ if (IOS_DEPLOYMENT_TARGET)
 endif()
 
 set (CMAKE_SHARED_LINKER_FLAGS_INIT "-fapplication-extension")
-if (NOT SIMULATOR_FLAG)
-    set (BITCODE "-fembed-bitcode")
-endif()
-set (CMAKE_C_FLAGS_INIT "${XCODE_IOS_PLATFORM_VERSION_FLAGS} ${BITCODE}")
+set (CMAKE_C_FLAGS_INIT "${XCODE_IOS_PLATFORM_VERSION_FLAGS}")
 # Hidden visibilty is required for cxx on iOS
-set (CMAKE_CXX_FLAGS_INIT "${XCODE_IOS_PLATFORM_VERSION_FLAGS} ${BITCODE} -fvisibility-inlines-hidden")
+set (CMAKE_CXX_FLAGS_INIT "${XCODE_IOS_PLATFORM_VERSION_FLAGS} -fvisibility-inlines-hidden")
 
 set (CMAKE_C_LINK_FLAGS   "${XCODE_IOS_PLATFORM_VERSION_FLAGS} -fapplication-extension -Wl,-search_paths_first ${CMAKE_C_LINK_FLAGS}")
 set (CMAKE_CXX_LINK_FLAGS "${XCODE_IOS_PLATFORM_VERSION_FLAGS} -fapplication-extension -Wl,-search_paths_first ${CMAKE_CXX_LINK_FLAGS}")
@@ -202,7 +199,7 @@ if (NOT DEFINED IOS_ARCH)
     elseif (IOS_PLATFORM STREQUAL "SIMULATOR")
         set (IOS_ARCH "i386;x86_64;arm64")
     elseif (IOS_PLATFORM STREQUAL "WATCHOS")
-        set (IOS_ARCH "armv7k;arm64_32")
+        set (IOS_ARCH "armv7k;arm64_32;arm64")
     elseif (IOS_PLATFORM STREQUAL "WATCHSIMULATOR")
         set (IOS_ARCH "i386;x86_64;arm64")
     elseif (IOS_PLATFORM STREQUAL "TVOS")

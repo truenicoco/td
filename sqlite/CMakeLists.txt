@@ -19,6 +19,8 @@ set(SQLITE_SOURCE
   sqlite/sqlite3session.h
 )
 
+# all SQLite functions are moved to namespace tdsqlite3 by `sed -Ebi 's/sqlite3([^.]|$)/td&/g' *`
+
 add_library(tdsqlite STATIC ${SQLITE_SOURCE})
 target_include_directories(tdsqlite PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 target_include_directories(tdsqlite SYSTEM PRIVATE ${OPENSSL_INCLUDE_DIR})
@@ -57,7 +59,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
 endif()
 
 if (GCC OR CLANG)
-  target_compile_options(tdsqlite PRIVATE -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-const-variable -Wno-unused-function)
+  target_compile_options(tdsqlite PRIVATE -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-const-variable -Wno-unused-function -Wno-maybe-uninitialized -Wno-return-local-addr)
   if (CLANG)
     target_compile_options(tdsqlite PRIVATE -Wno-parentheses-equality -Wno-unused-value -Wno-unused-command-line-argument -Qunused-arguments)
   endif()

@@ -1,12 +1,11 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 #include "td/telegram/net/NetQueryDispatcher.h"
 
-#include "td/telegram/ConfigShared.h"
 #include "td/telegram/Global.h"
 #include "td/telegram/net/AuthDataShared.h"
 #include "td/telegram/net/DcAuthManager.h"
@@ -24,7 +23,7 @@
 #include "td/utils/format.h"
 #include "td/utils/logging.h"
 #include "td/utils/misc.h"
-#include "td/utils/port/thread.h"
+#include "td/utils/port/sleep.h"
 #include "td/utils/Slice.h"
 #include "td/utils/SliceBuilder.h"
 
@@ -47,10 +46,10 @@ void NetQueryDispatcher::dispatch(NetQueryPtr net_query) {
     net_query->set_error(Global::request_aborted_error());
     return complete_net_query(std::move(net_query));
   }
-  if (G()->shared_config().get_option_boolean("test_flood_wait")) {
+  if (G()->get_option_boolean("test_flood_wait")) {
     net_query->set_error(Status::Error(429, "Too Many Requests: retry after 10"));
     return complete_net_query(std::move(net_query));
-    //    if (net_query->is_ok() && net_query->tl_constructor() == 0x0d9d75a4) {
+    //    if (net_query->is_ok() && net_query->tl_constructor() == telegram_api::messages_sendMessage::ID) {
     //      net_query->set_error(Status::Error(420, "FLOOD_WAIT_10"));
     //    }
   }
@@ -61,7 +60,7 @@ void NetQueryDispatcher::dispatch(NetQueryPtr net_query) {
 
   if (!net_query->in_sequence_dispatcher() && !net_query->get_chain_ids().empty()) {
     net_query->debug("sent to main sequence dispatcher");
-    send_closure(sequence_dispatcher_, &MultiSequenceDispatcher::send, std::move(net_query));
+    send_closure_later(sequence_dispatcher_, &MultiSequenceDispatcher::send, std::move(net_query));
     return;
   }
 
@@ -74,7 +73,7 @@ void NetQueryDispatcher::dispatch(NetQueryPtr net_query) {
         net_query->resend();
       } else if (code < 0 || code == 500 || code == 420) {
         net_query->debug("sent to NetQueryDelayer");
-        return send_closure(delayer_, &NetQueryDelayer::delay, std::move(net_query));
+        return send_closure_later(delayer_, &NetQueryDelayer::delay, std::move(net_query));
       }
     }
   }
@@ -168,22 +167,22 @@ Status NetQueryDispatcher::wait_dc_init(DcId dc_id, bool force) {
     int32 slow_net_scheduler_id = G()->get_slow_net_scheduler_id();
 
     auto raw_dc_id = dc_id.get_raw_id();
-    bool is_premium = G()->shared_config().get_option_boolean("is_premium");
+    bool is_premium = G()->get_option_boolean("is_premium");
     int32 upload_session_count = (raw_dc_id != 2 && raw_dc_id != 4) || is_premium ? 8 : 4;
     int32 download_session_count = is_premium ? 8 : 2;
     int32 download_small_session_count = is_premium ? 8 : 2;
     dc.main_session_ = create_actor<SessionMultiProxy>(PSLICE() << "SessionMultiProxy:" << raw_dc_id << ":main",
-                                                       session_count, auth_data, raw_dc_id == main_dc_id_, use_pfs,
-                                                       false, false, is_cdn, need_destroy_key);
+                                                       session_count, auth_data, true, raw_dc_id == main_dc_id_,
+                                                       use_pfs, false, false, is_cdn, need_destroy_key);
     dc.upload_session_ = create_actor_on_scheduler<SessionMultiProxy>(
         PSLICE() << "SessionMultiProxy:" << raw_dc_id << ":upload", slow_net_scheduler_id, upload_session_count,
-        auth_data, false, use_pfs, false, true, is_cdn, need_destroy_key);
+        auth_data, false, false, use_pfs, false, true, is_cdn, need_destroy_key);
     dc.download_session_ = create_actor_on_scheduler<SessionMultiProxy>(
         PSLICE() << "SessionMultiProxy:" << raw_dc_id << ":download", slow_net_scheduler_id, download_session_count,
-        auth_data, false, use_pfs, true, true, is_cdn, need_destroy_key);
+        auth_data, false, false, use_pfs, true, true, is_cdn, need_destroy_key);
     dc.download_small_session_ = create_actor_on_scheduler<SessionMultiProxy>(
         PSLICE() << "SessionMultiProxy:" << raw_dc_id << ":download_small", slow_net_scheduler_id,
-        download_small_session_count, auth_data, false, use_pfs, true, true, is_cdn, need_destroy_key);
+        download_small_session_count, auth_data, false, false, use_pfs, true, true, is_cdn, need_destroy_key);
     dc.is_inited_ = true;
     if (dc_id.is_internal()) {
       send_closure_later(dc_auth_manager_, &DcAuthManager::add_dc, std::move(auth_data));
@@ -194,7 +193,7 @@ Status NetQueryDispatcher::wait_dc_init(DcId dc_id, bool force) {
         return Status::Error("Closing");
       }
 #if !TD_THREAD_UNSUPPORTED
-      td::this_thread::yield();
+      usleep_for(1);
 #endif
     }
   }
@@ -210,12 +209,12 @@ void NetQueryDispatcher::stop() {
   std::lock_guard<std::mutex> guard(main_dc_id_mutex_);
   td_guard_.reset();
   stop_flag_ = true;
-  delayer_.hangup();
-  for (const auto &dc : dcs_) {
-    dc.main_session_.hangup();
-    dc.upload_session_.hangup();
-    dc.download_session_.hangup();
-    dc.download_small_session_.hangup();
+  delayer_.reset();
+  for (auto &dc : dcs_) {
+    dc.main_session_.reset();
+    dc.upload_session_.reset();
+    dc.download_session_.reset();
+    dc.download_small_session_.reset();
   }
   public_rsa_key_watchdog_.reset();
   dc_auth_manager_.reset();
@@ -278,11 +277,11 @@ bool NetQueryDispatcher::is_dc_inited(int32 raw_dc_id) {
 }
 
 int32 NetQueryDispatcher::get_session_count() {
-  return max(narrow_cast<int32>(G()->shared_config().get_option_integer("session_count")), 1);
+  return max(narrow_cast<int32>(G()->get_option_integer("session_count")), 1);
 }
 
 bool NetQueryDispatcher::get_use_pfs() {
-  return G()->shared_config().get_option_boolean("use_pfs") || get_session_count() > 1;
+  return G()->get_option_boolean("use_pfs") || get_session_count() > 1;
 }
 
 NetQueryDispatcher::NetQueryDispatcher(const std::function<ActorShared<>()> &create_reference) {
@@ -331,7 +330,7 @@ void NetQueryDispatcher::set_main_dc_id(int32 new_main_dc_id) {
     return;
   }
 
-  // Very rare event. Mutex is ok.
+  // Very rare event; mutex is ok.
   std::lock_guard<std::mutex> guard(main_dc_id_mutex_);
   if (new_main_dc_id == main_dc_id_) {
     return;

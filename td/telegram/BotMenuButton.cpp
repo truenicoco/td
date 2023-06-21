@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -133,7 +133,7 @@ void set_menu_button(Td *td, UserId user_id, td_api::object_ptr<td_api::botMenuB
     input_bot_menu_button = telegram_api::make_object<telegram_api::botMenuButtonCommands>();
   } else if (menu_button->text_.empty()) {
     if (menu_button->url_ != "default") {
-      return promise.set_error(Status::Error(400, "Menu button text can't be empty"));
+      return promise.set_error(Status::Error(400, "Menu button text must be non-empty"));
     }
     input_bot_menu_button = telegram_api::make_object<telegram_api::botMenuButtonDefault>();
   } else {

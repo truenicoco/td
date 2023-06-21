@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2022
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -55,14 +55,6 @@ public final class Example {
     private static final String commandsLine = "Enter command (gcs - GetChats, gc <chatId> - GetChat, me - GetMe, sm <chatId> <message> - SendMessage, lo - LogOut, q - Quit): ";
     private static volatile String currentPrompt = null;
 
-    static {
-        try {
-            System.loadLibrary("tdjni");
-        } catch (UnsatisfiedLinkError e) {
-            e.printStackTrace();
-        }
-    }
-
     private static void print(String str) {
         if (currentPrompt != null) {
             System.out.println("");
@@ -101,21 +93,18 @@ public final class Example {
         }
         switch (Example.authorizationState.getConstructor()) {
             case TdApi.AuthorizationStateWaitTdlibParameters.CONSTRUCTOR:
-                TdApi.TdlibParameters parameters = new TdApi.TdlibParameters();
-                parameters.databaseDirectory = "tdlib";
-                parameters.useMessageDatabase = true;
-                parameters.useSecretChats = true;
-                parameters.apiId = 94575;
-                parameters.apiHash = "a3406de8d171bb422bb6ddf3bbd800e2";
-                parameters.systemLanguageCode = "en";
-                parameters.deviceModel = "Desktop";
-                parameters.applicationVersion = "1.0";
-                parameters.enableStorageOptimizer = true;
+                TdApi.SetTdlibParameters request = new TdApi.SetTdlibParameters();
+                request.databaseDirectory = "tdlib";
+                request.useMessageDatabase = true;
+                request.useSecretChats = true;
+                request.apiId = 94575;
+                request.apiHash = "a3406de8d171bb422bb6ddf3bbd800e2";
+                request.systemLanguageCode = "en";
+                request.deviceModel = "Desktop";
+                request.applicationVersion = "1.0";
+                request.enableStorageOptimizer = true;
 
-                client.send(new TdApi.SetTdlibParameters(parameters), new AuthorizationRequestHandler());
-                break;
-            case TdApi.AuthorizationStateWaitEncryptionKey.CONSTRUCTOR:
-                client.send(new TdApi.CheckDatabaseEncryptionKey(), new AuthorizationRequestHandler());
+                client.send(request, new AuthorizationRequestHandler());
                 break;
             case TdApi.AuthorizationStateWaitPhoneNumber.CONSTRUCTOR: {
                 String phoneNumber = promptString("Please enter phone number: ");
@@ -125,6 +114,16 @@ public final class Example {
             case TdApi.AuthorizationStateWaitOtherDeviceConfirmation.CONSTRUCTOR: {
                 String link = ((TdApi.AuthorizationStateWaitOtherDeviceConfirmation) Example.authorizationState).link;
                 System.out.println("Please confirm this login link on another device: " + link);
+                break;
+            }
+            case TdApi.AuthorizationStateWaitEmailAddress.CONSTRUCTOR: {
+                String emailAddress = promptString("Please enter email address: ");
+                client.send(new TdApi.SetAuthenticationEmailAddress(emailAddress), new AuthorizationRequestHandler());
+                break;
+            }
+            case TdApi.AuthorizationStateWaitEmailCode.CONSTRUCTOR: {
+                String code = promptString("Please enter email authentication code: ");
+                client.send(new TdApi.CheckAuthenticationEmailCode(new TdApi.EmailAddressAuthenticationCode(code)), new AuthorizationRequestHandler());
                 break;
             }
             case TdApi.AuthorizationStateWaitCode.CONSTRUCTOR: {
@@ -640,19 +639,19 @@ public final class Example {
                 throw new ExternalClientError("Fatal error: " + errorMessage);
             }
 
-            private static final class ClientError extends Error {
+            final class ClientError extends Error {
                 private ClientError(String message) {
                     super(message);
                 }
             }
 
-            private static final class ExternalClientError extends Error {
+            final class ExternalClientError extends Error {
                 public ExternalClientError(String message) {
                     super(message);
                 }
             }
 
-            private static boolean isDatabaseBrokenError(String message) {
+            private boolean isDatabaseBrokenError(String message) {
                 return message.contains("Wrong key or database is corrupted") ||
                         message.contains("SQL logic error or missing database") ||
                         message.contains("database disk image is malformed") ||
@@ -661,12 +660,12 @@ public final class Example {
                         message.contains("Database was corrupted and deleted during execution and can't be recreated");
             }
 
-            private static boolean isDiskFullError(String message) {
+            private boolean isDiskFullError(String message) {
                 return message.contains("PosixError : No space left on device") ||
                         message.contains("database or disk is full");
             }
 
-            private static boolean isDiskError(String message) {
+            private boolean isDiskError(String message) {
                 return message.contains("I/O error") || message.contains("Structure needs cleaning");
             }
         }
