@@ -24,7 +24,7 @@ jobs:
         run: |
           sudo apt-get install make zlib1g-dev libssl-dev gperf php-cli cmake clang-14 libc++-dev libc++abi-dev
           mkdir build
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=../tdlib -DTD_ENABLE_LTO=ON -DCMAKE_AR=/usr/bin/llvm-ar-14 -DCMAKE_NM=/usr/bin/llvm-nm-14 -DCMAKE_OBJDUMP=/usr/bin/llvm-objdump-14 -DCMAKE_RANLIB=/usr/bin/llvm-ranlib-14  -S ./tdlib -B ./build -G Ninja
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=../tdlib -DTD_ENABLE_LTO=ON -DCMAKE_AR=/usr/bin/llvm-ar-14 -DCMAKE_NM=/usr/bin/llvm-nm-14 -DCMAKE_OBJDUMP=/usr/bin/llvm-objdump-14 -DCMAKE_RANLIB=/usr/bin/llvm-ranlib-14  -S ./tdlib -B ./build
           cmake --build ./build --target tdjson --parallel 2
           strip --strip-all ./build/libtdjson.so.*
           mv -v ./build/libtdjson.so.* ./build/libtdjson_linux_amd64.so
