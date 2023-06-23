@@ -1,0 +1,61 @@
+name: Build and publish Linux TDLib binaries
+
+on:
+  push:
+    tags:
+      - "aiotdlib_*"
+
+jobs:
+  build_ubuntu:
+    name: Build Linux x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+        with:
+          path: tdlib
+
+      - name: Build TDLib
+        run: |
+          sudo apt-get update
+          sudo apt-get upgrade
+          sudo apt-get install make git zlib1g-dev libssl-dev gperf php-cli cmake clang-14 libc++-dev libc++abi-dev
+          mkdir build
+          CXXFLAGS="-stdlib=libc++" CC=/usr/bin/clang-14 CXX=/usr/bin/clang++-14 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=../tdlib -DTD_ENABLE_LTO=ON -DCMAKE_AR=/usr/bin/llvm-ar-14 -DCMAKE_NM=/usr/bin/llvm-nm-14 -DCMAKE_OBJDUMP=/usr/bin/llvm-objdump-14 -DCMAKE_RANLIB=/usr/bin/llvm-ranlib-14 ..
+          cmake --build ./build --target install
+          strip --strip-all ./build/libtdjson.so.*
+          mv -v ./build/libtdjson.so.* ./build/libtdjson_linux_amd64.so
+
+      - name: Release artifacts to packages
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/libtdjson_linux_amd64.so
+
+  build_freebsd:
+    name: Build FreeBSD x86_64
+    runs-on: macos-12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+        with:
+          path: tdlib
+
+      - name: Build TDLib
+        uses: vmactions/freebsd-vm@v0
+        with:
+          release: 13.1
+          mem: 3072
+          prepare: |
+            pkg update
+            pkg install -y llvm cmake ninja gperf openssl lzlib gperf
+          run: |
+            mkdir ./build
+            cmake -DCMAKE_BUILD_TYPE=Release -S ./tdlib -B ./build -G Ninja
+            cmake --build ./build --target tdjson --parallel 2
+            strip --strip-all ./build/libtdjson.so.*
+            mv -v ./build/libtdjson.so.* ./build/libtdjson_freebsd_amd64.so
+
+      - name: Release artifacts to packages
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/libtdjson_freebsd_amd64.so
