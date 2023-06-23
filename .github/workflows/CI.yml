@@ -17,10 +17,14 @@ jobs:
           path: tdlib
 
       - name: Build TDLib
+        env:
+          CXXFLAGS: "-stdlib=libc++"
+          CC: "/usr/bin/clang-14"
+          CXX: "/usr/bin/clang++-14"
         run: |
           sudo apt-get install make zlib1g-dev libssl-dev gperf php-cli cmake clang-14 libc++-dev libc++abi-dev
           mkdir build
-          CXXFLAGS="-stdlib=libc++" CC=/usr/bin/clang-14 CXX=/usr/bin/clang++-14 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=../tdlib -DTD_ENABLE_LTO=ON -DCMAKE_AR=/usr/bin/llvm-ar-14 -DCMAKE_NM=/usr/bin/llvm-nm-14 -DCMAKE_OBJDUMP=/usr/bin/llvm-objdump-14 -DCMAKE_RANLIB=/usr/bin/llvm-ranlib-14  -S ./tdlib -B ./build -G Ninja
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=../tdlib -DTD_ENABLE_LTO=ON -DCMAKE_AR=/usr/bin/llvm-ar-14 -DCMAKE_NM=/usr/bin/llvm-nm-14 -DCMAKE_OBJDUMP=/usr/bin/llvm-objdump-14 -DCMAKE_RANLIB=/usr/bin/llvm-ranlib-14  -S ./tdlib -B ./build -G Ninja
           cmake --build ./build --target tdjson --parallel 2
           strip --strip-all ./build/libtdjson.so.*
           mv -v ./build/libtdjson.so.* ./build/libtdjson_linux_amd64.so
