@@ -11,6 +11,7 @@
 #include "td/db/DbKey.h"
 #include "td/db/KeyValueSyncInterface.h"
 
+#include "td/utils/common.h"
 #include "td/utils/Promise.h"
 #include "td/utils/Slice.h"
 #include "td/utils/Status.h"
@@ -38,6 +39,9 @@ class SqliteConnectionSafe;
 class SqliteKeyValueSafe;
 class SqliteKeyValueAsyncInterface;
 class SqliteKeyValue;
+class StoryDbSyncInterface;
+class StoryDbSyncSafeInterface;
+class StoryDbAsyncInterface;
 
 class TdDb {
  public:
@@ -72,6 +76,7 @@ class TdDb {
     vector<BinlogEvent> to_messages_manager;
     vector<BinlogEvent> to_notification_manager;
     vector<BinlogEvent> to_notification_settings_manager;
+    vector<BinlogEvent> to_story_manager;
 
     int64 since_last_open = 0;
   };
@@ -140,6 +145,9 @@ class TdDb {
   DialogDbSyncInterface *get_dialog_db_sync();
   DialogDbAsyncInterface *get_dialog_db_async();
 
+  StoryDbSyncInterface *get_story_db_sync();
+  StoryDbAsyncInterface *get_story_db_async();
+
   void change_key(DbKey key, Promise<> promise);
 
   void with_db_path(const std::function<void(CSlice)> &callback);
@@ -166,6 +174,9 @@ class TdDb {
 
   std::shared_ptr<DialogDbSyncSafeInterface> dialog_db_sync_safe_;
   std::shared_ptr<DialogDbAsyncInterface> dialog_db_async_;
+
+  std::shared_ptr<StoryDbSyncSafeInterface> story_db_sync_safe_;
+  std::shared_ptr<StoryDbAsyncInterface> story_db_async_;
 
   std::shared_ptr<BinlogKeyValue<ConcurrentBinlog>> binlog_pmc_;
   std::shared_ptr<BinlogKeyValue<ConcurrentBinlog>> config_pmc_;

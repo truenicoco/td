@@ -6,6 +6,7 @@
 //
 #include "td/telegram/DraftMessage.h"
 
+#include "td/telegram/AccessRights.h"
 #include "td/telegram/Dependencies.h"
 #include "td/telegram/Global.h"
 #include "td/telegram/MessageEntity.h"
@@ -13,6 +14,7 @@
 #include "td/telegram/misc.h"
 #include "td/telegram/ServerMessageId.h"
 #include "td/telegram/Td.h"
+#include "td/telegram/telegram_api.h"
 #include "td/telegram/UpdatesManager.h"
 
 #include "td/utils/buffer.h"
@@ -77,6 +79,11 @@ class SaveDraftMessageQuery final : public Td::ResultHandler {
   }
 
   void on_error(Status status) final {
+    if (status.message() == "TOPIC_CLOSED") {
+      // when the draft is a reply to a message in a closed topic, server will not allow to save it
+      // with the error "TOPIC_CLOSED", but the draft will be kept locally
+      return promise_.set_value(Unit());
+    }
     if (!td_->messages_manager_->on_get_dialog_error(dialog_id_, status, "SaveDraftMessageQuery")) {
       LOG(ERROR) << "Receive error for SaveDraftMessageQuery: " << status;
     }
@@ -194,8 +201,12 @@ Result<unique_ptr<DraftMessage>> DraftMessage::get_draft_message(
   if (result->reply_to_message_id_ != MessageId() && !result->reply_to_message_id_.is_valid()) {
     return Status::Error(400, "Invalid reply_to_message_id specified");
   }
-  result->reply_to_message_id_ = td->messages_manager_->get_reply_to_message_id(dialog_id, top_thread_message_id,
-                                                                                result->reply_to_message_id_, true);
+  result->reply_to_message_id_ =
+      td->messages_manager_
+          ->get_message_input_reply_to(
+              dialog_id, top_thread_message_id,
+              td_api::make_object<td_api::messageReplyToMessage>(0, result->reply_to_message_id_.get()), true)
+          .message_id_;
 
   auto input_message_content = std::move(draft_message->input_message_text_);
   if (input_message_content != nullptr) {

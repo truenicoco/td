@@ -194,7 +194,41 @@ class FileNode {
   void init_ready_size();
 
   void recalc_ready_prefix_size(int64 prefix_offset, int64 ready_prefix_size);
+
   void update_effective_download_limit(int64 old_download_limit);
+
+  string get_persistent_file_id() const;
+
+  string get_unique_file_id() const;
+
+  static string get_unique_id(const FullGenerateFileLocation &location);
+  static string get_unique_id(const FullRemoteFileLocation &location);
+
+  static string get_persistent_id(const FullGenerateFileLocation &location);
+  static string get_persistent_id(const FullRemoteFileLocation &location);
+
+  FileType get_type() const {
+    if (local_.type() == LocalFileLocation::Type::Full) {
+      return local_.full().file_type_;
+    }
+    if (remote_.full) {
+      return remote_.full.value().file_type_;
+    }
+    if (generate_ != nullptr) {
+      return generate_->file_type_;
+    }
+    return FileType::Temp;
+  }
+
+  int64 expected_size(bool may_guess = false) const;
+  bool is_downloading() const;
+  int64 downloaded_prefix(int64 offset) const;
+  int64 local_prefix_size() const;
+  int64 local_total_size() const;
+  bool is_uploading() const;
+  int64 remote_size() const;
+  string path() const;
+  bool can_delete() const;
 };
 
 class FileManager;
@@ -235,6 +269,10 @@ class ConstFileNodePtr {
   }
   const FullRemoteFileLocation *get_remote() const {
     return file_node_ptr_.get_remote();
+  }
+
+  const FileNode *get() const {
+    return file_node_ptr_.get();
   }
 
  private:
@@ -292,16 +330,7 @@ class FileView {
   bool can_delete() const;
 
   FileType get_type() const {
-    if (has_local_location()) {
-      return local_location().file_type_;
-    }
-    if (has_remote_location()) {
-      return remote_location().file_type_;
-    }
-    if (has_generate_location()) {
-      return generate_location().file_type_;
-    }
-    return FileType::Temp;
+    return node_->get_type();
   }
   bool is_encrypted_secret() const {
     return get_type() == FileType::Encrypted;
@@ -334,18 +363,15 @@ class FileView {
            type != PhotoSizeSource::Type::Thumbnail;
   }
 
-  string get_persistent_file_id() const;
-
-  string get_unique_file_id() const;
+  string get_unique_file_id() const {
+    if (!empty()) {
+      return node_->get_unique_file_id();
+    }
+    return string();
+  }
 
  private:
   ConstFileNodePtr node_{};
-
-  static string get_unique_id(const FullGenerateFileLocation &location);
-  static string get_unique_id(const FullRemoteFileLocation &location);
-
-  static string get_persistent_id(const FullGenerateFileLocation &location);
-  static string get_persistent_id(const FullRemoteFileLocation &location);
 };
 
 class FileManager final : public FileLoadManager::Callback {
@@ -421,6 +447,8 @@ class FileManager final : public FileLoadManager::Callback {
 
   static bool is_remotely_generated_file(Slice conversion);
 
+  static vector<int> get_missing_file_parts(const Status &error);
+
   void init_actor();
 
   FileId dup_file_id(FileId file_id, const char *source);
@@ -461,7 +489,7 @@ class FileManager final : public FileLoadManager::Callback {
   void download(FileId file_id, std::shared_ptr<DownloadCallback> callback, int32 new_priority, int64 offset,
                 int64 limit, Promise<td_api::object_ptr<td_api::file>> promise);
   void upload(FileId file_id, std::shared_ptr<UploadCallback> callback, int32 new_priority, uint64 upload_order);
-  void resume_upload(FileId file_id, std::vector<int> bad_parts, std::shared_ptr<UploadCallback> callback,
+  void resume_upload(FileId file_id, vector<int> bad_parts, std::shared_ptr<UploadCallback> callback,
                      int32 new_priority, uint64 upload_order, bool force = false, bool prefer_small = false);
   void cancel_upload(FileId file_id);
   bool delete_partial_remote_location(FileId file_id);
@@ -504,7 +532,9 @@ class FileManager final : public FileLoadManager::Callback {
   vector<tl_object_ptr<telegram_api::InputDocument>> get_input_documents(const vector<FileId> &file_ids);
 
   static bool extract_was_uploaded(const tl_object_ptr<telegram_api::InputMedia> &input_media);
+
   static bool extract_was_thumbnail_uploaded(const tl_object_ptr<telegram_api::InputMedia> &input_media);
+
   static string extract_file_reference(const tl_object_ptr<telegram_api::InputMedia> &input_media);
 
   static string extract_file_reference(const tl_object_ptr<telegram_api::InputDocument> &input_document);
@@ -512,6 +542,7 @@ class FileManager final : public FileLoadManager::Callback {
   static string extract_file_reference(const tl_object_ptr<telegram_api::InputPhoto> &input_photo);
 
   static bool extract_was_uploaded(const tl_object_ptr<telegram_api::InputChatPhoto> &input_chat_photo);
+
   static string extract_file_reference(const tl_object_ptr<telegram_api::InputChatPhoto> &input_chat_photo);
 
   template <class StorerT>

@@ -14,10 +14,12 @@
 #include "td/telegram/net/Session.h"
 #include "td/telegram/Td.h"
 #include "td/telegram/TdDb.h"
+#include "td/telegram/telegram_api.h"
 #include "td/telegram/UniqueId.h"
 
 #include "td/utils/buffer.h"
 #include "td/utils/common.h"
+#include "td/utils/format.h"
 #include "td/utils/HashTableUtils.h"
 #include "td/utils/logging.h"
 #include "td/utils/Promise.h"
@@ -25,6 +27,7 @@
 #include "td/utils/SliceBuilder.h"
 #include "td/utils/Time.h"
 #include "td/utils/tl_helpers.h"
+#include "td/utils/tl_parsers.h"
 
 namespace td {
 
@@ -63,7 +66,14 @@ class SessionCallback final : public Session::Callback {
   }
 
   void on_update(BufferSlice &&update, uint64 auth_key_id) final {
-    send_closure_later(G()->td(), &Td::on_update, std::move(update), auth_key_id);
+    TlBufferParser parser(&update);
+    auto updates = telegram_api::Updates::fetch(parser);
+    parser.fetch_end();
+    if (parser.get_error()) {
+      LOG(ERROR) << "Failed to fetch update: " << parser.get_error() << format::as_hex_dump<4>(update.as_slice());
+      updates = nullptr;
+    }
+    send_closure_later(G()->td(), &Td::on_update, std::move(updates), auth_key_id);
   }
 
   void on_result(NetQueryPtr query) final {
@@ -236,8 +246,8 @@ void SessionProxy::open_session(bool force) {
   session_ = create_actor<Session>(
       name,
       make_unique<SessionCallback>(actor_shared(this, session_generation_), dc_id, allow_media_only_, is_media_, hash),
-      auth_data_, raw_dc_id, int_dc_id, is_primary_, is_main_, use_pfs_, is_cdn_, need_destroy_, tmp_auth_key_,
-      server_salts_);
+      auth_data_, raw_dc_id, int_dc_id, is_primary_, is_main_, use_pfs_, persist_tmp_auth_key_, is_cdn_, need_destroy_,
+      tmp_auth_key_, server_salts_);
 }
 
 void SessionProxy::update_auth_key_state() {

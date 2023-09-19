@@ -67,7 +67,7 @@ class Session final
   };
 
   Session(unique_ptr<Callback> callback, std::shared_ptr<AuthDataShared> shared_auth_data, int32 raw_dc_id, int32 dc_id,
-          bool is_primary, bool is_main, bool use_pfs, bool is_cdn, bool need_destroy,
+          bool is_primary, bool is_main, bool use_pfs, bool persist_tmp_auth_key, bool is_cdn, bool need_destroy,
           const mtproto::AuthKey &tmp_auth_key, const vector<mtproto::ServerSalt> &server_salts);
 
   void send(NetQueryPtr &&query);
@@ -78,16 +78,20 @@ class Session final
 
  private:
   struct Query final : private ListNode {
-    uint64 container_message_id;
-    NetQueryPtr query;
+    uint64 container_message_id_;
+    NetQueryPtr net_query_;
 
-    bool ack = false;
-    bool unknown = false;
+    bool is_acknowledged_ = false;
+    bool is_unknown_ = false;
 
-    int8 connection_id;
-    double sent_at_;
-    Query(uint64 message_id, NetQueryPtr &&q, int8 connection_id, double sent_at)
-        : container_message_id(message_id), query(std::move(q)), connection_id(connection_id), sent_at_(sent_at) {
+    const int8 connection_id_;
+    const double sent_at_;
+
+    Query(uint64 message_id, NetQueryPtr &&net_query, int8 connection_id, double sent_at)
+        : container_message_id_(message_id)
+        , net_query_(std::move(net_query))
+        , connection_id_(connection_id)
+        , sent_at_(sent_at) {
     }
 
     ListNode *get_list_node() {
@@ -108,6 +112,7 @@ class Session final
   const int32 dc_id_;      // unique datacenter ID, i.e. -10002
   const bool is_primary_;  // true for primary Sessions to all DCs
   const bool is_main_;     // true only for the primary Session(s) to the main DC
+  const bool persist_tmp_auth_key_;
   const bool is_cdn_;
   const bool need_destroy_;
   bool was_on_network_ = false;
@@ -209,7 +214,7 @@ class Session final
   void on_server_salt_updated() final;
   void on_server_time_difference_updated(bool force) final;
 
-  void on_session_created(uint64 unique_id, uint64 first_message_id) final;
+  void on_new_session_created(uint64 unique_id, uint64 first_message_id) final;
   void on_session_failed(Status status) final;
 
   void on_container_sent(uint64 container_message_id, vector<uint64> message_ids) final;
@@ -221,7 +226,7 @@ class Session final
   void on_message_result_error(uint64 message_id, int error_code, string message) final;
   void on_message_failed(uint64 message_id, Status status) final;
 
-  void on_message_info(uint64 message_id, int32 state, uint64 answer_message_id, int32 answer_size) final;
+  void on_message_info(uint64 message_id, int32 state, uint64 answer_message_id, int32 answer_size, int32 source) final;
 
   Status on_destroy_auth_key() final;
 
@@ -264,6 +269,7 @@ class Session final
   void on_check_key_result(NetQueryPtr query);
 
   void start_up() final;
+  void timeout_expired() final;
   void loop() final;
   void hangup() final;
   void raw_event(const Event::Raw &event) final;

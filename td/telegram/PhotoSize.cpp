@@ -9,6 +9,7 @@
 #include "td/telegram/files/FileLocation.h"
 #include "td/telegram/files/FileManager.h"
 #include "td/telegram/Td.h"
+#include "td/telegram/telegram_api.h"
 
 #include "td/utils/base64.h"
 #include "td/utils/HttpUrl.h"
@@ -410,25 +411,25 @@ PhotoSize get_web_document_photo_size(FileManager *file_manager, FileType file_t
 
 Result<PhotoSize> get_input_photo_size(FileManager *file_manager, FileId file_id, int32 width, int32 height) {
   if (width < 0 || width > 10000) {
-    return Status::Error(400, "Wrong photo width");
+    return Status::Error(400, "Width of the photo is too big");
   }
   if (height < 0 || height > 10000) {
-    return Status::Error(400, "Wrong photo height");
+    return Status::Error(400, "Height of the photo is too big");
   }
   if (width + height > 10000) {
-    return Status::Error(400, "Photo dimensions are too big");
+    return Status::Error(400, "Dimensions of the photo are too big");
   }
 
   auto file_view = file_manager->get_file_view(file_id);
   auto file_size = file_view.size();
   if (file_size < 0 || file_size >= 1000000000) {
-    return Status::Error(400, "Photo is too big");
+    return Status::Error(400, "Size of the photo is too big");
   }
 
   int32 type = 'i';
   if (file_view.has_remote_location() && !file_view.remote_location().is_web()) {
     auto photo_size_source = file_view.remote_location().get_source();
-    if (photo_size_source.get_type("create_input_message_content") == PhotoSizeSource::Type::Thumbnail) {
+    if (photo_size_source.get_type("get_input_photo_size") == PhotoSizeSource::Type::Thumbnail) {
       auto old_type = photo_size_source.thumbnail().thumbnail_type;
       if (old_type != 't') {
         type = old_type;

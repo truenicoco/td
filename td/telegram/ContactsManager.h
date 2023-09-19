@@ -13,7 +13,6 @@
 #include "td/telegram/ChannelType.h"
 #include "td/telegram/ChatId.h"
 #include "td/telegram/Contact.h"
-#include "td/telegram/CustomEmojiId.h"
 #include "td/telegram/DialogAdministrator.h"
 #include "td/telegram/DialogId.h"
 #include "td/telegram/DialogInviteLink.h"
@@ -36,6 +35,7 @@
 #include "td/telegram/RestrictionReason.h"
 #include "td/telegram/SecretChatId.h"
 #include "td/telegram/StickerSetId.h"
+#include "td/telegram/StoryId.h"
 #include "td/telegram/SuggestedAction.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/telegram_api.h"
@@ -127,6 +127,8 @@ class ContactsManager final : public Actor {
   bool get_chat_has_protected_content(ChatId chat_id) const;
   bool get_channel_has_protected_content(ChannelId channel_id) const;
 
+  bool get_user_stories_hidden(UserId user_id) const;
+
   string get_user_private_forward_name(UserId user_id);
   bool get_user_voice_messages_forbidden(UserId user_id) const;
 
@@ -159,7 +161,7 @@ class ContactsManager final : public Actor {
 
   void reload_contacts(bool force);
 
-  void on_get_user(tl_object_ptr<telegram_api::User> &&user, const char *source, bool is_me = false);
+  void on_get_user(tl_object_ptr<telegram_api::User> &&user, const char *source);
   void on_get_users(vector<tl_object_ptr<telegram_api::User>> &&users, const char *source);
 
   void on_binlog_user_event(BinlogEvent &&event);
@@ -184,9 +186,13 @@ class ContactsManager final : public Actor {
   void on_update_user_name(UserId user_id, string &&first_name, string &&last_name, Usernames &&usernames);
   void on_update_user_phone_number(UserId user_id, string &&phone_number);
   void on_update_user_emoji_status(UserId user_id, tl_object_ptr<telegram_api::EmojiStatus> &&emoji_status);
+  void on_update_user_story_ids(UserId user_id, StoryId max_active_story_id, StoryId max_read_story_id);
+  void on_update_user_max_read_story_id(UserId user_id, StoryId max_read_story_id);
+  void on_update_user_stories_hidden(UserId user_id, bool stories_hidden);
   void on_update_user_online(UserId user_id, tl_object_ptr<telegram_api::UserStatus> &&status);
   void on_update_user_local_was_online(UserId user_id, int32 local_was_online);
-  void on_update_user_is_blocked(UserId user_id, bool is_blocked);
+  void on_update_user_is_blocked(UserId user_id, bool is_blocked, bool is_blocked_for_stories);
+  void on_update_user_has_pinned_stories(UserId user_id, bool has_pinned_stories);
   void on_update_user_common_chat_count(UserId user_id, int32 common_chat_count);
   void on_update_user_need_phone_number_privacy_exception(UserId user_id, bool need_phone_number_privacy_exception);
 
@@ -305,6 +311,8 @@ class ContactsManager final : public Actor {
 
   UserId add_channel_bot_user();
 
+  static ChatId get_unsupported_chat_id();
+
   void on_update_username_is_active(UserId user_id, string &&username, bool is_active, Promise<Unit> &&promise);
 
   void on_update_active_usernames_order(UserId user_id, vector<string> &&usernames, Promise<Unit> &&promise);
@@ -357,6 +365,12 @@ class ContactsManager final : public Actor {
   void clear_imported_contacts(Promise<Unit> &&promise);
 
   void on_update_contacts_reset();
+
+  vector<UserId> get_close_friends(Promise<Unit> &&promise);
+
+  void set_close_friends(vector<UserId> user_ids, Promise<Unit> &&promise);
+
+  void on_set_close_friends(const vector<UserId> &user_ids, Promise<Unit> &&promise);
 
   UserId search_user_by_phone_number(string phone_number, Promise<Unit> &&promise);
 
@@ -565,15 +579,11 @@ class ContactsManager final : public Actor {
 
   bool have_user(UserId user_id) const;
   bool have_min_user(UserId user_id) const;
-  bool have_user_force(UserId user_id);
+  bool have_user_force(UserId user_id, const char *source);
 
   bool is_dialog_info_received_from_server(DialogId dialog_id) const;
 
   void reload_dialog_info(DialogId dialog_id, Promise<Unit> &&promise);
-
-  void get_user_link(Promise<td_api::object_ptr<td_api::userLink>> &&promise);
-
-  void search_user_by_token(string token, Promise<td_api::object_ptr<td_api::user>> &&promise);
 
   static void send_get_me_query(Td *td, Promise<Unit> &&promise);
   UserId get_me(Promise<Unit> &&promise);
@@ -581,7 +591,7 @@ class ContactsManager final : public Actor {
   void reload_user(UserId user_id, Promise<Unit> &&promise);
   void load_user_full(UserId user_id, bool force, Promise<Unit> &&promise, const char *source);
   FileSourceId get_user_full_file_source_id(UserId user_id);
-  void reload_user_full(UserId user_id, Promise<Unit> &&promise);
+  void reload_user_full(UserId user_id, Promise<Unit> &&promise, const char *source);
 
   void get_user_profile_photos(UserId user_id, int32 offset, int32 limit,
                                Promise<td_api::object_ptr<td_api::chatPhotos>> &&promise);
@@ -594,7 +604,7 @@ class ContactsManager final : public Actor {
   void reload_chat(ChatId chat_id, Promise<Unit> &&promise);
   void load_chat_full(ChatId chat_id, bool force, Promise<Unit> &&promise, const char *source);
   FileSourceId get_chat_full_file_source_id(ChatId chat_id);
-  void reload_chat_full(ChatId chat_id, Promise<Unit> &&promise);
+  void reload_chat_full(ChatId chat_id, Promise<Unit> &&promise, const char *source);
 
   int32 get_chat_date(ChatId chat_id) const;
   int32 get_chat_participant_count(ChatId chat_id) const;
@@ -704,6 +714,10 @@ class ContactsManager final : public Actor {
 
   void get_support_user(Promise<td_api::object_ptr<td_api::user>> &&promise);
 
+  void on_view_user_active_stories(vector<UserId> user_ids);
+
+  void on_get_user_max_active_story_ids(const vector<UserId> &user_ids, const vector<int32> &max_story_ids);
+
   void repair_chat_participants(ChatId chat_id);
 
   void get_current_state(vector<td_api::object_ptr<td_api::Update>> &updates) const;
@@ -735,7 +749,7 @@ class ContactsManager final : public Actor {
     string phone_number;
     int64 access_hash = -1;
     EmojiStatus emoji_status;
-    CustomEmojiId last_sent_emoji_status;
+    EmojiStatus last_sent_emoji_status;
 
     ProfilePhoto photo;
 
@@ -745,6 +759,10 @@ class ContactsManager final : public Actor {
 
     int32 was_online = 0;
     int32 local_was_online = 0;
+
+    double max_active_story_id_next_reload_time = 0.0;
+    StoryId max_active_story_id;
+    StoryId max_read_story_id;
 
     string language_code;
 
@@ -771,21 +789,30 @@ class ContactsManager final : public Actor {
     bool is_fake = false;
     bool is_contact = false;
     bool is_mutual_contact = false;
+    bool is_close_friend = false;
     bool need_apply_min_photo = false;
     bool can_be_added_to_attach_menu = false;
     bool attach_menu_enabled = false;
+    bool stories_hidden = false;
 
     bool is_photo_inited = false;
 
     bool is_repaired = false;  // whether cached value is rechecked
 
+    bool is_max_active_story_id_being_reloaded = false;
+
     bool is_name_changed = true;
     bool is_username_changed = true;
     bool is_photo_changed = true;
     bool is_phone_number_changed = true;
+    bool is_emoji_status_changed = true;
     bool is_is_contact_changed = true;
+    bool is_is_mutual_contact_changed = true;
     bool is_is_deleted_changed = true;
+    bool is_is_premium_changed = true;
+    bool is_stories_hidden_changed = true;
     bool is_full_info_changed = false;
+    bool is_being_updated = false;
     bool is_changed = true;             // have new changes that need to be sent to the client and database
     bool need_save_to_database = true;  // have new changes that need only to be saved to the database
     bool is_status_changed = true;
@@ -831,14 +858,17 @@ class ContactsManager final : public Actor {
     int32 common_chat_count = 0;
 
     bool is_blocked = false;
+    bool is_blocked_for_stories = false;
     bool can_be_called = false;
     bool supports_video_calls = false;
     bool has_private_calls = false;
     bool can_pin_messages = true;
     bool need_phone_number_privacy_exception = false;
     bool voice_messages_forbidden = false;
+    bool has_pinned_stories = false;
 
     bool is_common_chat_count_changed = true;
+    bool is_being_updated = false;
     bool is_changed = true;             // have new changes that need to be sent to the client and database
     bool need_send_update = true;       // have new changes that need only to be sent to the client
     bool need_save_to_database = true;  // have new changes that need only to be saved to the database
@@ -883,6 +913,7 @@ class ContactsManager final : public Actor {
     bool is_status_changed = true;
     bool is_is_active_changed = true;
     bool is_noforwards_changed = true;
+    bool is_being_updated = false;
     bool is_changed = true;             // have new changes that need to be sent to the client and database
     bool need_save_to_database = true;  // have new changes that need only to be saved to the database
     bool is_update_basic_group_sent = false;
@@ -921,6 +952,7 @@ class ContactsManager final : public Actor {
 
     bool can_set_username = false;
 
+    bool is_being_updated = false;
     bool is_changed = true;             // have new changes that need to be sent to the client and database
     bool need_send_update = true;       // have new changes that need only to be sent to the client
     bool need_save_to_database = true;  // have new changes that need only to be saved to the database
@@ -974,6 +1006,7 @@ class ContactsManager final : public Actor {
     bool is_creator_changed = true;
     bool had_read_access = true;
     bool was_member = false;
+    bool is_being_updated = false;
     bool is_changed = true;             // have new changes that need to be sent to the client and database
     bool need_save_to_database = true;  // have new changes that need only to be saved to the database
     bool is_update_supergroup_sent = false;
@@ -1041,6 +1074,7 @@ class ContactsManager final : public Actor {
     bool can_be_deleted = false;
 
     bool is_slow_mode_next_send_date_changed = true;
+    bool is_being_updated = false;
     bool is_changed = true;             // have new changes that need to be sent to the client and database
     bool need_send_update = true;       // have new changes that need only to be sent to the client
     bool need_save_to_database = true;  // have new changes that need only to be saved to the database
@@ -1073,6 +1107,7 @@ class ContactsManager final : public Actor {
 
     bool is_ttl_changed = true;
     bool is_state_changed = true;
+    bool is_being_updated = false;
     bool is_changed = true;             // have new changes that need to be sent to the client and database
     bool need_save_to_database = true;  // have new changes that need only to be saved to the database
 
@@ -1103,6 +1138,9 @@ class ContactsManager final : public Actor {
     bool is_channel = false;
     bool is_public = false;
     bool is_megagroup = false;
+    bool is_verified = false;
+    bool is_scam = false;
+    bool is_fake = false;
   };
 
   struct PendingGetPhotoRequest {
@@ -1151,8 +1189,10 @@ class ContactsManager final : public Actor {
   static constexpr size_t MAX_INVITE_LINK_TITLE_LENGTH = 32;  // server side limit
   static constexpr int32 MAX_GET_CHANNEL_PARTICIPANTS = 200;  // server side limit
 
-  static constexpr int32 CHANNEL_PARTICIPANT_CACHE_TIME = 1800;  // some reasonable limit
+  static constexpr int32 CHANNEL_PARTICIPANT_CACHE_TIME = 1800;   // some reasonable limit
+  static constexpr int32 MAX_ACTIVE_STORY_ID_RELOAD_TIME = 3600;  // some reasonable limit
 
+  // the True fields aren't set for manually created telegram_api::user objects, therefore the flags must be used
   static constexpr int32 USER_FLAG_HAS_ACCESS_HASH = 1 << 0;
   static constexpr int32 USER_FLAG_HAS_FIRST_NAME = 1 << 1;
   static constexpr int32 USER_FLAG_HAS_LAST_NAME = 1 << 2;
@@ -1184,6 +1224,7 @@ class ContactsManager final : public Actor {
   static constexpr int32 USER_FLAG_HAS_EMOJI_STATUS = 1 << 30;
   static constexpr int32 USER_FLAG_HAS_USERNAMES = 1 << 0;
   static constexpr int32 USER_FLAG_CAN_BE_EDITED_BOT = 1 << 1;
+  static constexpr int32 USER_FLAG_IS_CLOSE_FRIEND = 1 << 2;
 
   static constexpr int32 USER_FULL_FLAG_IS_BLOCKED = 1 << 0;
   static constexpr int32 USER_FULL_FLAG_HAS_ABOUT = 1 << 1;
@@ -1296,10 +1337,10 @@ class ContactsManager final : public Actor {
 
   const User *get_user(UserId user_id) const;
   User *get_user(UserId user_id);
-  User *get_user_force(UserId user_id);
-  User *get_user_force_impl(UserId user_id);
+  User *get_user_force(UserId user_id, const char *source);
+  User *get_user_force_impl(UserId user_id, const char *source);
 
-  User *add_user(UserId user_id, const char *source);
+  User *add_user(UserId user_id);
 
   const UserFull *get_user_full(UserId user_id) const;
   UserFull *get_user_full(UserId user_id);
@@ -1364,8 +1405,6 @@ class ContactsManager final : public Actor {
   string get_channel_search_text(ChannelId channel_id) const;
   static string get_channel_search_text(const Channel *c);
 
-  void get_user_link_impl(Promise<td_api::object_ptr<td_api::userLink>> &&promise);
-
   void set_my_id(UserId my_id);
 
   static bool is_allowed_username(const string &username);
@@ -1378,7 +1417,11 @@ class ContactsManager final : public Actor {
   void on_update_user_photo(User *u, UserId user_id, tl_object_ptr<telegram_api::UserProfilePhoto> &&photo,
                             const char *source);
   void on_update_user_emoji_status(User *u, UserId user_id, EmojiStatus emoji_status);
-  void on_update_user_is_contact(User *u, UserId user_id, bool is_contact, bool is_mutual_contact);
+  void on_update_user_story_ids_impl(User *u, UserId user_id, StoryId max_active_story_id, StoryId max_read_story_id);
+  void on_update_user_max_read_story_id(User *u, UserId user_id, StoryId max_read_story_id);
+  void on_update_user_stories_hidden(User *u, UserId user_id, bool stories_hidden);
+  void on_update_user_is_contact(User *u, UserId user_id, bool is_contact, bool is_mutual_contact,
+                                 bool is_close_friend);
   void on_update_user_online(User *u, UserId user_id, tl_object_ptr<telegram_api::UserStatus> &&status);
   void on_update_user_local_was_online(User *u, UserId user_id, int32 local_was_online);
 
@@ -1400,7 +1443,8 @@ class ContactsManager final : public Actor {
 
   void register_user_photo(User *u, UserId user_id, const Photo &photo);
 
-  static void on_update_user_full_is_blocked(UserFull *user_full, UserId user_id, bool is_blocked);
+  static void on_update_user_full_is_blocked(UserFull *user_full, UserId user_id, bool is_blocked,
+                                             bool is_blocked_for_stories);
   static void on_update_user_full_common_chat_count(UserFull *user_full, UserId user_id, int32 common_chat_count);
   static void on_update_user_full_commands(UserFull *user_full, UserId user_id,
                                            vector<tl_object_ptr<telegram_api::botCommand>> &&bot_commands);
@@ -1711,6 +1755,10 @@ class ContactsManager final : public Actor {
 
   void on_dismiss_suggested_action(SuggestedAction action, Result<Unit> &&result);
 
+  bool need_poll_active_stories(const User *u, UserId user_id) const;
+
+  static bool get_user_has_unread_stories(const User *u);
+
   td_api::object_ptr<td_api::updateUser> get_update_user_object(UserId user_id, const User *u) const;
 
   td_api::object_ptr<td_api::updateUser> get_update_unknown_user_object(UserId user_id) const;
@@ -1880,7 +1928,7 @@ class ContactsManager final : public Actor {
   WaitFreeHashMap<UserId, tl_object_ptr<telegram_api::UserProfilePhoto>, UserIdHash> pending_user_photos_;
   struct UserIdPhotoIdHash {
     uint32 operator()(const std::pair<UserId, int64> &pair) const {
-      return UserIdHash()(pair.first) * 2023654985u + Hash<int64>()(pair.second);
+      return combine_hashes(UserIdHash()(pair.first), Hash<int64>()(pair.second));
     }
   };
   WaitFreeHashMap<std::pair<UserId, int64>, FileSourceId, UserIdPhotoIdHash> user_profile_photo_file_source_ids_;
@@ -1971,7 +2019,7 @@ class ContactsManager final : public Actor {
         , promise(std::move(promise)) {
     }
   };
-  FlatHashMap<FileId, UploadedProfilePhoto, FileIdHash> uploaded_profile_photos_;  // file_id -> promise
+  FlatHashMap<FileId, UploadedProfilePhoto, FileIdHash> uploaded_profile_photos_;
 
   struct ImportContactsTask {
     Promise<Unit> promise_;
