@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -78,17 +78,12 @@ class InlineQueriesManager final : public Actor {
   void on_chosen_result(UserId user_id, Location user_location, const string &query, const string &result_id,
                         tl_object_ptr<telegram_api::InputBotInlineMessageID> &&input_bot_inline_message_id);
 
-  static int32 get_inline_message_dc_id(const tl_object_ptr<telegram_api::InputBotInlineMessageID> &inline_message_id);
-
-  static tl_object_ptr<telegram_api::InputBotInlineMessageID> get_input_bot_inline_message_id(
-      const string &inline_message_id);
-
   static string get_inline_message_id(
       tl_object_ptr<telegram_api::InputBotInlineMessageID> &&input_bot_inline_message_id);
 
  private:
-  static constexpr int32 MAX_RECENT_INLINE_BOTS = 20;  // some reasonable value
-  static constexpr int32 INLINE_QUERY_DELAY_MS = 400;  // server side limit
+  static constexpr size_t MAX_RECENT_INLINE_BOTS = 20;  // some reasonable value
+  static constexpr int32 INLINE_QUERY_DELAY_MS = 400;   // server side limit
 
   static constexpr int32 BOT_INLINE_MEDIA_RESULT_FLAG_HAS_PHOTO = 1 << 0;
   static constexpr int32 BOT_INLINE_MEDIA_RESULT_FLAG_HAS_DOCUMENT = 1 << 1;

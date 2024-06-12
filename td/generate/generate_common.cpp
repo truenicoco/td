@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -38,10 +38,6 @@ int main() {
 
   generate_cpp<>("td/telegram", "secret_api", "std::string", "BufferSlice",
                  {"\"td/tl/tl_object_parse.h\"", "\"td/tl/tl_object_store.h\""}, {"\"td/utils/buffer.h\""});
-
-  generate_cpp<>("td/mtproto", "mtproto_api", "Slice", "Slice",
-                 {"\"td/tl/tl_object_parse.h\"", "\"td/tl/tl_object_store.h\""},
-                 {"\"td/utils/Slice.h\"", "\"td/utils/UInt.h\""});
 
 #ifdef TD_ENABLE_JNI
   generate_cpp<false, td::TD_TL_writer_jni_cpp, td::TD_TL_writer_jni_h>(

@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -9,7 +9,6 @@
 #include "td/telegram/AttachMenuManager.h"
 #include "td/telegram/AuthManager.hpp"
 #include "td/telegram/ConfigManager.h"
-#include "td/telegram/ContactsManager.h"
 #include "td/telegram/DialogFilterManager.h"
 #include "td/telegram/Global.h"
 #include "td/telegram/logevent/LogEvent.h"
@@ -32,6 +31,7 @@
 #include "td/telegram/ThemeManager.h"
 #include "td/telegram/TopDialogManager.h"
 #include "td/telegram/UpdatesManager.h"
+#include "td/telegram/UserManager.h"
 #include "td/telegram/Version.h"
 
 #include "td/utils/base64.h"
@@ -287,7 +287,7 @@ AuthManager::AuthManager(int32 api_id, const string &api_hash, ActorShared<> par
     if (is_bot_str == "true") {
       is_bot_ = true;
     }
-    auto my_id = ContactsManager::load_my_id();
+    auto my_id = UserManager::load_my_id();
     if (my_id.is_valid()) {
       // just in case
       LOG(INFO) << "Logged in as " << my_id;
@@ -295,8 +295,8 @@ AuthManager::AuthManager(int32 api_id, const string &api_hash, ActorShared<> par
       update_state(State::Ok);
     } else {
       LOG(ERROR) << "Restore unknown my_id";
-      ContactsManager::send_get_me_query(
-          td_, PromiseCreator::lambda([this](Result<Unit> result) { update_state(State::Ok); }));
+      UserManager::send_get_me_query(td_,
+                                     PromiseCreator::lambda([this](Result<Unit> result) { update_state(State::Ok); }));
     }
     G()->net_query_dispatcher().check_authorization_is_ok();
   } else if (auth_str == "logout") {
@@ -319,19 +319,14 @@ void AuthManager::start_up() {
     G()->net_query_dispatcher().destroy_auth_keys(PromiseCreator::lambda([](Result<Unit> result) {
       if (result.is_ok()) {
         send_closure_later(G()->td(), &Td::destroy);
+      } else {
+        LOG(INFO) << "Failed to destroy auth keys";
       }
     }));
   }
 }
 void AuthManager::tear_down() {
   parent_.reset();
-}
-
-bool AuthManager::is_bot() const {
-  if (net_query_id_ != 0 && net_query_type_ == NetQueryType::BotAuthentication) {
-    return true;
-  }
-  return is_bot_ && was_authorized();
 }
 
 bool AuthManager::was_authorized() const {
@@ -544,6 +539,15 @@ void AuthManager::set_firebase_token(uint64 query_id, string token) {
                   G()->net_query_creator().create_unauth(send_code_helper_.request_firebase_sms(token)));
 }
 
+void AuthManager::report_missing_code(uint64 query_id, string mobile_network_code) {
+  if (state_ != State::WaitCode) {
+    return on_query_error(query_id, Status::Error(400, "Call to reportAuthenticationCodeMissing unexpected"));
+  }
+  G()->net_query_dispatcher().dispatch_with_callback(
+      G()->net_query_creator().create_unauth(send_code_helper_.report_missing_code(mobile_network_code)),
+      actor_shared(this));
+}
+
 void AuthManager::set_email_address(uint64 query_id, string email_address) {
   if (state_ != State::WaitEmailAddress) {
     if (state_ == State::WaitEmailCode && net_query_id_ == 0) {
@@ -564,7 +568,7 @@ void AuthManager::set_email_address(uint64 query_id, string email_address) {
                   G()->net_query_creator().create_unauth(send_code_helper_.send_verify_email_code(email_address_)));
 }
 
-void AuthManager::resend_authentication_code(uint64 query_id) {
+void AuthManager::resend_authentication_code(uint64 query_id, td_api::object_ptr<td_api::ResendCodeReason> &&reason) {
   if (state_ != State::WaitCode) {
     if (state_ == State::WaitEmailCode) {
       on_new_query(query_id);
@@ -576,7 +580,7 @@ void AuthManager::resend_authentication_code(uint64 query_id) {
     return on_query_error(query_id, Status::Error(400, "Call to resendAuthenticationCode unexpected"));
   }
 
-  auto r_resend_code = send_code_helper_.resend_code();
+  auto r_resend_code = send_code_helper_.resend_code(std::move(reason));
   if (r_resend_code.is_error()) {
     return on_query_error(query_id, r_resend_code.move_as_error());
   }
@@ -641,7 +645,7 @@ void AuthManager::check_code(uint64 query_id, string code) {
   send_auth_sign_in_query();
 }
 
-void AuthManager::register_user(uint64 query_id, string first_name, string last_name) {
+void AuthManager::register_user(uint64 query_id, string first_name, string last_name, bool disable_notification) {
   if (state_ != State::WaitRegistration) {
     return on_query_error(query_id, Status::Error(400, "Call to registerUser unexpected"));
   }
@@ -653,8 +657,12 @@ void AuthManager::register_user(uint64 query_id, string first_name, string last_
   }
 
   last_name = clean_name(last_name, MAX_NAME_LENGTH);
+  int32 flags = 0;
+  if (disable_notification) {
+    flags |= telegram_api::auth_signUp::NO_JOINED_NOTIFICATIONS_MASK;
+  }
   start_net_query(NetQueryType::SignUp, G()->net_query_creator().create_unauth(telegram_api::auth_signUp(
-                                            send_code_helper_.phone_number().str(),
+                                            flags, false /*ignored*/, send_code_helper_.phone_number().str(),
                                             send_code_helper_.phone_code_hash().str(), first_name, last_name)));
 }
 
@@ -778,10 +786,9 @@ void AuthManager::do_delete_account(uint64 query_id, string reason,
 }
 
 void AuthManager::on_closing(bool destroy_flag) {
-  if (destroy_flag) {
-    update_state(State::LoggingOut);
-  } else {
-    update_state(State::Closing);
+  auto new_state = destroy_flag ? State::LoggingOut : State::Closing;
+  if (new_state != state_) {
+    update_state(new_state);
   }
 }
 
@@ -849,7 +856,7 @@ void AuthManager::on_sent_code(telegram_api::object_ptr<telegram_api::auth_SentC
     send_code_helper_.on_phone_code_hash(std::move(sent_code->phone_code_hash_));
     allow_apple_id_ = code_type->apple_signin_allowed_;
     allow_google_id_ = code_type->google_signin_allowed_;
-    update_state(State::WaitEmailAddress, true);
+    update_state(State::WaitEmailAddress);
   } else if (code_type_id == telegram_api::auth_sentCodeTypeEmailCode::ID) {
     auto code_type = move_tl_object_as<telegram_api::auth_sentCodeTypeEmailCode>(std::move(sent_code->type_));
     send_code_helper_.on_phone_code_hash(std::move(sent_code->phone_code_hash_));
@@ -870,10 +877,10 @@ void AuthManager::on_sent_code(telegram_api::object_ptr<telegram_api::auth_SentC
       email_code_info_ = SentEmailCode("<unknown>", code_type->length_);
       CHECK(!email_code_info_.is_empty());
     }
-    update_state(State::WaitEmailCode, true);
+    update_state(State::WaitEmailCode);
   } else {
     send_code_helper_.on_sent_code(std::move(sent_code));
-    update_state(State::WaitCode, true);
+    update_state(State::WaitCode);
   }
   on_current_query_ok();
 }
@@ -900,7 +907,7 @@ void AuthManager::on_send_email_code_result(NetQueryPtr &&net_query) {
     return on_current_query_error(Status::Error(500, "Receive invalid response"));
   }
 
-  update_state(State::WaitEmailCode, true);
+  update_state(State::WaitEmailCode);
   on_current_query_ok();
 }
 
@@ -929,7 +936,7 @@ void AuthManager::on_reset_email_address_result(NetQueryPtr &&net_query) {
         r_sent_code.error().message() == "TASK_ALREADY_EXISTS") {
       reset_pending_date_ = G()->unix_time() + reset_available_period_;
       reset_available_period_ = -1;
-      update_state(State::WaitEmailCode, true);
+      update_state(State::WaitEmailCode);
     }
     return on_current_query_error(r_sent_code.move_as_error());
   }
@@ -975,7 +982,7 @@ void AuthManager::on_get_login_token(tl_object_ptr<telegram_api::auth_LoginToken
       auto token = move_tl_object_as<telegram_api::auth_loginToken>(login_token);
       login_token_ = token->token_.as_slice().str();
       set_login_token_expires_at(Time::now() + td::max(token->expires_ - G()->server_time(), 1.0));
-      update_state(State::WaitQrCodeConfirmation, true);
+      update_state(State::WaitQrCodeConfirmation);
       on_current_query_ok();
       break;
     }
@@ -1090,9 +1097,8 @@ void AuthManager::on_request_password_recovery_result(NetQueryPtr &&net_query) {
     return on_current_query_error(r_email_address_pattern.move_as_error());
   }
   auto email_address_pattern = r_email_address_pattern.move_as_ok();
-  CHECK(email_address_pattern->get_id() == telegram_api::auth_passwordRecovery::ID);
   wait_password_state_.email_address_pattern_ = std::move(email_address_pattern->email_pattern_);
-  update_state(State::WaitPassword, true);
+  update_state(State::WaitPassword);
   on_current_query_ok();
 }
 
@@ -1137,10 +1143,19 @@ void AuthManager::on_log_out_result(NetQueryPtr &&net_query) {
   } else if (r_log_out.error().code() != 401) {
     LOG(ERROR) << "Receive error for auth.logOut: " << r_log_out.error();
   }
-  // state_ will stay LoggingOut, so no queries will work.
   destroy_auth_keys();
   on_current_query_ok();
 }
+
+void AuthManager::on_account_banned() const {
+  if (is_bot()) {
+    return;
+  }
+  LOG(ERROR) << "Your account was banned for suspicious activity. If you think that this is a mistake, please try to "
+                "log in from an official mobile app and send an email to recover the account by following instructions "
+                "provided by the app";
+}
+
 void AuthManager::on_authorization_lost(string source) {
   if (state_ == State::LoggingOut && net_query_type_ == NetQueryType::LogOut) {
     LOG(INFO) << "Ignore authorization loss because of " << source << ", while logging out";
@@ -1151,25 +1166,26 @@ void AuthManager::on_authorization_lost(string source) {
     return;
   }
   LOG(WARNING) << "Lost authorization because of " << source;
+  if (source == "USER_DEACTIVATED_BAN") {
+    on_account_banned();
+  }
   destroy_auth_keys();
 }
 
 void AuthManager::destroy_auth_keys() {
   if (state_ == State::Closing || state_ == State::DestroyingKeys) {
+    LOG(INFO) << "Already destroying auth keys";
     return;
   }
   update_state(State::DestroyingKeys);
-  auto promise = PromiseCreator::lambda([](Result<Unit> result) {
-    if (result.is_ok()) {
-      G()->net_query_dispatcher().destroy_auth_keys(PromiseCreator::lambda([](Result<Unit> result) {
-        if (result.is_ok()) {
-          send_closure_later(G()->td(), &Td::destroy);
-        }
-      }));
-    }
-  });
   G()->td_db()->get_binlog_pmc()->set("auth", "destroy");
-  G()->td_db()->get_binlog_pmc()->force_sync(std::move(promise));
+  G()->net_query_dispatcher().destroy_auth_keys(PromiseCreator::lambda([](Result<Unit> result) {
+    if (result.is_ok()) {
+      send_closure_later(G()->td(), &Td::destroy);
+    } else {
+      LOG(INFO) << "Failed to destroy auth keys";
+    }
+  }));
 }
 
 void AuthManager::on_delete_account_result(NetQueryPtr &&net_query) {
@@ -1226,9 +1242,9 @@ void AuthManager::on_get_authorization(tl_object_ptr<telegram_api::auth_Authoriz
       user->self_ = true;
     }
   }
-  td_->contacts_manager_->on_get_user(std::move(auth->user_), "on_get_authorization");
-  update_state(State::Ok, true);
-  if (!td_->contacts_manager_->get_my_id().is_valid()) {
+  td_->user_manager_->on_get_user(std::move(auth->user_), "on_get_authorization");
+  update_state(State::Ok);
+  if (!td_->user_manager_->get_my_id().is_valid()) {
     LOG(ERROR) << "Server didsn't send proper authorization";
     on_current_query_error(Status::Error(500, "Server didn't send proper authorization"));
     log_out(0);
@@ -1254,8 +1270,8 @@ void AuthManager::on_get_authorization(tl_object_ptr<telegram_api::auth_Authoriz
   td_->theme_manager_->init();
   td_->top_dialog_manager_->init();
   td_->updates_manager_->get_difference("on_get_authorization");
-  td_->on_online_updated(false, true);
   if (!is_bot()) {
+    td_->on_online_updated(false, true);
     td_->schedule_get_terms_of_service(0);
     td_->reload_promo_data();
     G()->td_db()->get_binlog_pmc()->set("fetched_marks_as_unread", "1");
@@ -1290,9 +1306,7 @@ void AuthManager::on_result(NetQueryPtr net_query) {
         return;
       }
       if (net_query->error().message() == CSlice("PHONE_NUMBER_BANNED")) {
-        LOG(ERROR) << "Your phone number was banned for suspicious activity. If you think that this is a mistake, "
-                      "please try to log in from an official mobile app and send a email to recover the account by "
-                      "following instructions provided by the app.";
+        on_account_banned();
       }
       if (type != NetQueryType::LogOut && type != NetQueryType::DeleteAccount) {
         if (query_id_ != 0) {
@@ -1371,10 +1385,7 @@ void AuthManager::on_result(NetQueryPtr net_query) {
   }
 }
 
-void AuthManager::update_state(State new_state, bool force, bool should_save_state) {
-  if (state_ == new_state && !force) {
-    return;
-  }
+void AuthManager::update_state(State new_state, bool should_save_state) {
   bool skip_update = (state_ == State::LoggingOut || state_ == State::DestroyingKeys) &&
                      (new_state == State::LoggingOut || new_state == State::DestroyingKeys);
   state_ = new_state;
@@ -1445,7 +1456,7 @@ bool AuthManager::load_state() {
   } else {
     UNREACHABLE();
   }
-  update_state(db_state.state_, false, false);
+  update_state(db_state.state_, false);
   return true;
 }
 

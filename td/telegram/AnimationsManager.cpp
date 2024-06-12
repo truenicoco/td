@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -418,7 +418,6 @@ void AnimationsManager::on_update_animation_search_emojis() {
     return;
   }
   if (td_->auth_manager_->is_bot()) {
-    td_->option_manager_->set_option_empty("animation_search_emojis");
     return;
   }
 
@@ -437,7 +436,6 @@ void AnimationsManager::on_update_animation_search_provider() {
     return;
   }
   if (td_->auth_manager_->is_bot()) {
-    td_->option_manager_->set_option_empty("animation_search_provider");
     return;
   }
 
@@ -453,6 +451,9 @@ void AnimationsManager::on_update_animation_search_provider() {
 
 void AnimationsManager::on_update_saved_animations_limit() {
   if (G()->close_flag()) {
+    return;
+  }
+  if (td_->auth_manager_->is_bot()) {
     return;
   }
   auto saved_animations_limit =
@@ -756,16 +757,8 @@ void AnimationsManager::add_saved_animation_impl(FileId animation_id, bool add_o
     return promise.set_error(Status::Error(400, "Can't save encrypted animations"));
   }
 
-  auto it = std::find_if(saved_animation_ids_.begin(), saved_animation_ids_.end(), is_equal);
-  if (it == saved_animation_ids_.end()) {
-    if (static_cast<int32>(saved_animation_ids_.size()) == saved_animations_limit_) {
-      saved_animation_ids_.back() = animation_id;
-    } else {
-      saved_animation_ids_.push_back(animation_id);
-    }
-    it = saved_animation_ids_.end() - 1;
-  }
-  std::rotate(saved_animation_ids_.begin(), it, it + 1);
+  add_to_top_if(saved_animation_ids_, static_cast<size_t>(saved_animations_limit_), animation_id, is_equal);
+
   CHECK(is_equal(saved_animation_ids_[0]));
   if (saved_animation_ids_[0].get_remote() == 0 && animation_id.get_remote() != 0) {
     saved_animation_ids_[0] = animation_id;

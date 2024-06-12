@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -11,8 +11,9 @@
 #include "td/telegram/ChatId.h"
 #include "td/telegram/files/FileId.h"
 #include "td/telegram/files/FileSourceId.h"
-#include "td/telegram/FullMessageId.h"
+#include "td/telegram/MessageFullId.h"
 #include "td/telegram/PhotoSizeSource.h"
+#include "td/telegram/QuickReplyMessageFullId.h"
 #include "td/telegram/SetWithPosition.h"
 #include "td/telegram/StoryFullId.h"
 #include "td/telegram/td_api.h"
@@ -47,7 +48,7 @@ class FileReferenceManager final : public Actor {
   static bool is_file_reference_error(const Status &error);
   static size_t get_file_reference_error_pos(const Status &error);
 
-  FileSourceId create_message_file_source(FullMessageId full_message_id);
+  FileSourceId create_message_file_source(MessageFullId message_full_id);
   FileSourceId create_user_photo_file_source(UserId user_id, int64 photo_id);
   // file reference aren't used for chat/channel photo download and the photos can't be reused
   // FileSourceId create_chat_photo_file_source(ChatId chat_id);
@@ -66,6 +67,7 @@ class FileReferenceManager final : public Actor {
   FileSourceId create_attach_menu_bot_file_source(UserId user_id);
   FileSourceId create_web_app_file_source(UserId user_id, const string &short_name);
   FileSourceId create_story_file_source(StoryFullId story_full_id);
+  FileSourceId create_quick_reply_message_file_source(QuickReplyMessageFullId message_full_id);
 
   using NodeId = FileId;
   void repair_file_reference(NodeId node_id, Promise<> promise);
@@ -80,7 +82,7 @@ class FileReferenceManager final : public Actor {
 
   vector<FileSourceId> get_some_file_sources(NodeId node_id);
 
-  vector<FullMessageId> get_some_message_file_sources(NodeId node_id);
+  vector<MessageFullId> get_some_message_file_sources(NodeId node_id);
 
   bool remove_file_source(NodeId node_id, FileSourceId file_source_id);
 
@@ -118,7 +120,7 @@ class FileReferenceManager final : public Actor {
   };
 
   struct FileSourceMessage {
-    FullMessageId full_message_id;
+    MessageFullId message_full_id;
   };
   struct FileSourceUserPhoto {
     int64 photo_id;
@@ -174,13 +176,17 @@ class FileReferenceManager final : public Actor {
   struct FileSourceStory {
     StoryFullId story_full_id;
   };
+  struct FileSourceQuickReplyMessage {
+    QuickReplyMessageFullId message_full_id;
+  };
 
   // append only
   using FileSource =
       Variant<FileSourceMessage, FileSourceUserPhoto, FileSourceChatPhoto, FileSourceChannelPhoto, FileSourceWallpapers,
               FileSourceWebPage, FileSourceSavedAnimations, FileSourceRecentStickers, FileSourceFavoriteStickers,
               FileSourceBackground, FileSourceChatFull, FileSourceChannelFull, FileSourceAppConfig,
-              FileSourceSavedRingtones, FileSourceUserFull, FileSourceAttachMenuBot, FileSourceWebApp, FileSourceStory>;
+              FileSourceSavedRingtones, FileSourceUserFull, FileSourceAttachMenuBot, FileSourceWebApp, FileSourceStory,
+              FileSourceQuickReplyMessage>;
   WaitFreeVector<FileSource> file_sources_;
 
   int64 query_generation_{0};

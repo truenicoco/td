@@ -1,10 +1,12 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 #pragma once
+
+#include "td/mtproto/MessageId.h"
 
 #include "td/utils/common.h"
 
@@ -18,7 +20,7 @@ struct PacketInfo {
   uint64 salt{0};
   uint64 session_id{0};
 
-  uint64 message_id{0};
+  MessageId message_id;
   int32 seq_no{0};
   int32 version{1};
   bool no_crypto_flag{false};

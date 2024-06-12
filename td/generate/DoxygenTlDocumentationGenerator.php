@@ -236,10 +236,10 @@ EOT
  * auto message_text = td::td_api::make_object<td::td_api::formattedText>("Hello, world!!!",
  *                     td::td_api::array<td::td_api::object_ptr<td::td_api::textEntity>>());
  * auto send_message_request = td::td_api::make_object<td::td_api::sendMessage>(chat_id, 0, nullptr, nullptr, nullptr,
- *      td::td_api::make_object<td::td_api::inputMessageText>(std::move(message_text), false, true));
+ *      td::td_api::make_object<td::td_api::inputMessageText>(std::move(message_text), nullptr, true));
  * \\endcode
  *
- * \\tparam Type Type of an object to construct.
+ * \\tparam Type Type of object to construct.
  * \\param[in] args Arguments to pass to the object constructor.
  * \\return Wrapped pointer to the created object.
  */
@@ -287,8 +287,8 @@ EOT
  * }
  * \\endcode
  *
- * \\tparam ToType Type of a TDLib API object to move to.
- * \\tparam FromType Type of a TDLib API object to move from, this is auto-deduced.
+ * \\tparam ToType Type of TDLib API object to move to.
+ * \\tparam FromType Type of TDLib API object to move from, this is auto-deduced.
  * \\param[in] from Wrapped in td::td_api::object_ptr pointer to a TDLib API object.
  */
 EOT

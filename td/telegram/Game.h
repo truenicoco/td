@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -20,7 +20,7 @@
 
 namespace td {
 
-class ContactsManager;
+class UserManager;
 class Td;
 
 class Game {
@@ -79,7 +79,7 @@ bool operator!=(const Game &lhs, const Game &rhs);
 
 StringBuilder &operator<<(StringBuilder &string_builder, const Game &game);
 
-Result<Game> process_input_message_game(const ContactsManager *contacts_manager,
+Result<Game> process_input_message_game(const UserManager *user_manager,
                                         tl_object_ptr<td_api::InputMessageContent> &&input_message_content)
     TD_WARN_UNUSED_RESULT;
 

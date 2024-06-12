@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -8,8 +8,9 @@
 
 #include "td/telegram/AccessRights.h"
 #include "td/telegram/AuthManager.h"
-#include "td/telegram/ContactsManager.h"
+#include "td/telegram/ChatManager.h"
 #include "td/telegram/DialogId.h"
+#include "td/telegram/DialogManager.h"
 #include "td/telegram/Global.h"
 #include "td/telegram/logevent/LogEvent.h"
 #include "td/telegram/MessagesManager.h"
@@ -20,6 +21,7 @@
 #include "td/telegram/Td.h"
 #include "td/telegram/TdDb.h"
 #include "td/telegram/telegram_api.h"
+#include "td/telegram/UserManager.h"
 
 #include "td/actor/PromiseFuture.h"
 
@@ -101,12 +103,10 @@ class ResetTopPeerRatingQuery final : public Td::ResultHandler {
 
  public:
   void send(TopDialogCategory category, DialogId dialog_id) {
-    auto input_peer = td_->messages_manager_->get_input_peer(dialog_id, AccessRights::Read);
-    if (input_peer == nullptr) {
-      return;
-    }
-
     dialog_id_ = dialog_id;
+
+    auto input_peer = td_->dialog_manager_->get_input_peer(dialog_id, AccessRights::Read);
+    CHECK(input_peer != nullptr);
     send_query(G()->net_query_creator().create(
         telegram_api::contacts_resetTopPeerRating(get_input_top_peer_category(category), std::move(input_peer))));
   }
@@ -121,7 +121,7 @@ class ResetTopPeerRatingQuery final : public Td::ResultHandler {
   }
 
   void on_error(Status status) final {
-    if (!td_->messages_manager_->on_get_dialog_error(dialog_id_, status, "ResetTopPeerRatingQuery")) {
+    if (!td_->dialog_manager_->on_get_dialog_error(dialog_id_, status, "ResetTopPeerRatingQuery")) {
       LOG(INFO) << "Receive error for ResetTopPeerRatingQuery: " << status;
     }
   }
@@ -197,7 +197,8 @@ void TopDialogManager::on_toggle_top_peers(bool is_enabled, Result<Unit> &&resul
 }
 
 void TopDialogManager::on_dialog_used(TopDialogCategory category, DialogId dialog_id, int32 date) {
-  if (!is_active_ || !is_enabled_) {
+  CHECK(!td_->auth_manager_->is_bot());
+  if (!is_enabled_) {
     return;
   }
   auto pos = static_cast<size_t>(category);
@@ -237,10 +238,10 @@ void TopDialogManager::remove_dialog(TopDialogCategory category, DialogId dialog
   if (category == TopDialogCategory::Size) {
     return promise.set_error(Status::Error(400, "Top chat category must be non-empty"));
   }
-  if (!td_->messages_manager_->have_dialog_force(dialog_id, "remove_dialog")) {
-    return promise.set_error(Status::Error(400, "Chat not found"));
-  }
-  if (!is_active_ || !is_enabled_) {
+  TRY_STATUS_PROMISE(promise,
+                     td_->dialog_manager_->check_dialog_access(dialog_id, false, AccessRights::Read, "remove_dialog"));
+  CHECK(!td_->auth_manager_->is_bot());
+  if (!is_enabled_) {
     return promise.set_value(Unit());
   }
 
@@ -293,9 +294,7 @@ int TopDialogManager::is_top_dialog(TopDialogCategory category, size_t limit, Di
   CHECK(category != TopDialogCategory::Size);
   CHECK(category != TopDialogCategory::ForwardUsers);
   CHECK(limit > 0);
-  if (!is_active_) {
-    return -1;
-  }
+  CHECK(!td_->auth_manager_->is_bot());
   if (!is_enabled_) {
     return 0;
   }
@@ -313,7 +312,7 @@ int TopDialogManager::is_top_dialog(TopDialogCategory category, size_t limit, Di
 }
 
 void TopDialogManager::update_rating_e_decay() {
-  if (!is_active_) {
+  if (td_->auth_manager_->is_bot()) {
     return;
   }
   rating_e_decay_ = narrow_cast<int32>(G()->get_option_integer("rating_e_decay", rating_e_decay_));
@@ -351,14 +350,15 @@ double TopDialogManager::rating_add(double now, double rating_timestamp) const {
   return std::exp((now - rating_timestamp) / rating_e_decay_);
 }
 
-double TopDialogManager::current_rating_add(double rating_timestamp) const {
-  return rating_add(G()->server_time_cached(), rating_timestamp);
+double TopDialogManager::current_rating_add(double server_time, double rating_timestamp) const {
+  return rating_add(server_time, rating_timestamp);
 }
 
 void TopDialogManager::normalize_rating() {
+  auto server_time = G()->server_time();
   for (auto &top_dialogs : by_category_) {
-    auto div_by = current_rating_add(top_dialogs.rating_timestamp);
-    top_dialogs.rating_timestamp = G()->server_time_cached();
+    auto div_by = current_rating_add(server_time, top_dialogs.rating_timestamp);
+    top_dialogs.rating_timestamp = server_time;
     for (auto &dialog : top_dialogs.dialogs) {
       dialog.rating /= div_by;
     }
@@ -406,16 +406,16 @@ void TopDialogManager::on_load_dialogs(GetTopDialogsQuery &&query, vector<Dialog
   for (auto dialog_id : dialog_ids) {
     if (dialog_id.get_type() == DialogType::User) {
       auto user_id = dialog_id.get_user_id();
-      if (td_->contacts_manager_->is_user_deleted(user_id)) {
+      if (td_->user_manager_->is_user_deleted(user_id)) {
         LOG(INFO) << "Skip deleted " << user_id;
         continue;
       }
-      if (td_->contacts_manager_->get_my_id() == user_id) {
+      if (td_->user_manager_->get_my_id() == user_id) {
         LOG(INFO) << "Skip self " << user_id;
         continue;
       }
       if (query.category == TopDialogCategory::BotInline || query.category == TopDialogCategory::BotPM) {
-        auto r_bot_info = td_->contacts_manager_->get_bot_data(user_id);
+        auto r_bot_info = td_->user_manager_->get_bot_data(user_id);
         if (r_bot_info.is_error()) {
           LOG(INFO) << "Skip not a bot " << user_id;
           continue;
@@ -435,7 +435,7 @@ void TopDialogManager::on_load_dialogs(GetTopDialogsQuery &&query, vector<Dialog
   }
 
   query.promise.set_value(
-      td_->messages_manager_->get_chats_object(-1, std::move(result), "TopDialogManager::on_load_dialogs"));
+      td_->dialog_manager_->get_chats_object(-1, std::move(result), "TopDialogManager::on_load_dialogs"));
 }
 
 void TopDialogManager::do_get_top_peers() {
@@ -493,8 +493,8 @@ void TopDialogManager::on_get_top_peers(Result<telegram_api::object_ptr<telegram
       set_is_enabled(true);  // apply immediately
       auto top_peers = move_tl_object_as<telegram_api::contacts_topPeers>(std::move(top_peers_parent));
 
-      td_->contacts_manager_->on_get_users(std::move(top_peers->users_), "on get top chats");
-      td_->contacts_manager_->on_get_chats(std::move(top_peers->chats_), "on get top chats");
+      td_->user_manager_->on_get_users(std::move(top_peers->users_), "on get top chats");
+      td_->chat_manager_->on_get_chats(std::move(top_peers->chats_), "on get top chats");
       for (auto &category : top_peers->categories_) {
         auto dialog_category = get_top_dialog_category(category->category_);
         auto pos = static_cast<size_t>(dialog_category);
@@ -553,7 +553,6 @@ void TopDialogManager::init() {
     return;
   }
 
-  is_active_ = !td_->auth_manager_->is_bot();
   is_enabled_ = !G()->get_option_boolean("disable_top_chats");
   update_rating_e_decay();
 
@@ -571,13 +570,12 @@ void TopDialogManager::try_start() {
   first_unsync_change_ = Timestamp();
   server_sync_state_ = SyncState::None;
   last_server_sync_ = Timestamp();
-  CHECK(pending_get_top_dialogs_.empty());
 
-  LOG(DEBUG) << "Init is enabled: " << is_enabled_;
-  if (!is_active_) {
-    G()->td_db()->get_binlog_pmc()->erase_by_prefix("top_dialogs");
+  if (td_->auth_manager_->is_bot()) {
     return;
   }
+
+  LOG(DEBUG) << "Init is enabled: " << is_enabled_;
 
   auto di_top_dialogs_ts = G()->td_db()->get_binlog_pmc()->get("top_dialogs_ts");
   if (!di_top_dialogs_ts.empty()) {
@@ -616,15 +614,11 @@ void TopDialogManager::try_start() {
 
 void TopDialogManager::on_first_sync() {
   was_first_sync_ = true;
-  if (!G()->close_flag() && td_->auth_manager_->is_bot()) {
-    is_active_ = false;
-    try_start();
-  }
   loop();
 }
 
 void TopDialogManager::loop() {
-  if (!is_active_ || G()->close_flag()) {
+  if (G()->close_flag() || td_->auth_manager_->is_bot()) {
     return;
   }
 

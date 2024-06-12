@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -32,10 +32,11 @@
 namespace td {
 
 tl_object_ptr<td_api::temporaryPasswordState> TempPasswordState::get_temporary_password_state_object() const {
-  if (!has_temp_password || valid_until <= G()->unix_time()) {
+  auto unix_time = G()->unix_time();
+  if (!has_temp_password || valid_until <= unix_time) {
     return make_tl_object<td_api::temporaryPasswordState>(false, 0);
   }
-  return make_tl_object<td_api::temporaryPasswordState>(true, valid_until - G()->unix_time_cached());
+  return make_tl_object<td_api::temporaryPasswordState>(true, valid_until - unix_time);
 }
 
 static void hash_sha256(Slice data, Slice salt, MutableSlice dest) {
@@ -454,6 +455,18 @@ void PasswordManager::resend_recovery_email_address_code(Promise<State> promise)
   send_with_promise(std::move(query), PromiseCreator::lambda([actor_id = actor_id(this), promise = std::move(promise)](
                                                                  Result<NetQueryPtr> r_query) mutable {
                       auto r_result = fetch_result<telegram_api::account_resendPasswordEmail>(std::move(r_query));
+                      if (r_result.is_error() && r_result.error().message() != "EMAIL_HASH_EXPIRED") {
+                        return promise.set_error(r_result.move_as_error());
+                      }
+                      send_closure(actor_id, &PasswordManager::get_state, std::move(promise));
+                    }));
+}
+
+void PasswordManager::cancel_recovery_email_address_verification(Promise<State> promise) {
+  auto query = G()->net_query_creator().create(telegram_api::account_cancelPasswordEmail());
+  send_with_promise(std::move(query), PromiseCreator::lambda([actor_id = actor_id(this), promise = std::move(promise)](
+                                                                 Result<NetQueryPtr> r_query) mutable {
+                      auto r_result = fetch_result<telegram_api::account_cancelPasswordEmail>(std::move(r_query));
                       if (r_result.is_error() && r_result.error().message() != "EMAIL_HASH_EXPIRED") {
                         return promise.set_error(r_result.move_as_error());
                       }

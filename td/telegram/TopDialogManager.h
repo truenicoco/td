@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -52,7 +52,6 @@ class TopDialogManager final : public Actor {
   Td *td_;
   ActorShared<> parent_;
 
-  bool is_active_ = false;
   bool is_enabled_ = true;
   bool is_synchronized_ = false;
   int32 rating_e_decay_ = 241920;
@@ -99,7 +98,7 @@ class TopDialogManager final : public Actor {
   std::array<TopDialogs, static_cast<size_t>(TopDialogCategory::Size)> by_category_;
 
   double rating_add(double now, double rating_timestamp) const;
-  double current_rating_add(double rating_timestamp) const;
+  double current_rating_add(double server_time, double rating_timestamp) const;
   void normalize_rating();
 
   bool set_is_enabled(bool is_enabled);

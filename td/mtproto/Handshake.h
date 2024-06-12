@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -16,11 +16,6 @@
 #include "td/utils/UInt.h"
 
 namespace td {
-
-namespace mtproto_api {
-class Object;
-}  // namespace mtproto_api
-
 namespace mtproto {
 
 class DhCallback;
@@ -95,7 +90,8 @@ class AuthKeyHandshake {
 
   string last_query_;
 
-  static string store_object(const mtproto_api::Object &object);
+  template <class T>
+  static string store_object(const T &object);
 
   void send(Callback *connection, const Storer &storer);
   static void do_send(Callback *connection, const Storer &storer);

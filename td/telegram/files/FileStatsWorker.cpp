@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -200,6 +200,7 @@ void FileStatsWorker::get_stats(bool need_all_files, bool split_by_owner_dialog_
         return;
       }
       // LOG(INFO) << "Match! " << db_info.path << " from " << db_info.owner_dialog_id;
+      CHECK(it->second < full_infos.size());
       auto &full_info = full_infos[it->second];
       full_info.owner_dialog_id = db_info.owner_dialog_id;
       full_info.file_type = db_info.file_type;  // database file_type is the correct one

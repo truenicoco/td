@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -18,6 +18,7 @@ namespace td {
 struct MessageCopyOptions {
   bool send_copy = false;
   bool replace_caption = false;
+  bool new_invert_media = false;
   FormattedText new_caption;
   MessageInputReplyTo input_reply_to;
   unique_ptr<ReplyMarkup> reply_markup;
@@ -41,7 +42,8 @@ inline StringBuilder &operator<<(StringBuilder &string_builder, MessageCopyOptio
   if (copy_options.send_copy) {
     string_builder << "CopyOptions[replace_caption = " << copy_options.replace_caption;
     if (copy_options.replace_caption) {
-      string_builder << ", new_caption = " << copy_options.new_caption;
+      string_builder << ", new_caption = " << copy_options.new_caption
+                     << ", new_show_caption_above_media = " << copy_options.new_invert_media;
     }
     if (copy_options.input_reply_to.is_valid()) {
       string_builder << ", in reply to " << copy_options.input_reply_to;

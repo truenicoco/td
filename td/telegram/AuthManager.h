@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -28,7 +28,9 @@ class AuthManager final : public NetActor {
  public:
   AuthManager(int32 api_id, const string &api_hash, ActorShared<> parent);
 
-  bool is_bot() const;
+  bool is_bot() const {
+    return is_bot_ || net_query_type_ == NetQueryType::BotAuthentication;
+  }
 
   bool is_authorized() const;
   bool was_authorized() const;
@@ -37,12 +39,13 @@ class AuthManager final : public NetActor {
   void set_phone_number(uint64 query_id, string phone_number,
                         td_api::object_ptr<td_api::phoneNumberAuthenticationSettings> settings);
   void set_firebase_token(uint64 query_id, string token);
+  void report_missing_code(uint64 query_id, string mobile_network_code);
   void set_email_address(uint64 query_id, string email_address);
-  void resend_authentication_code(uint64 query_id);
+  void resend_authentication_code(uint64 query_id, td_api::object_ptr<td_api::ResendCodeReason> &&reason);
   void check_email_code(uint64 query_id, EmailVerification &&code);
   void reset_email_address(uint64 query_id);
   void check_code(uint64 query_id, string code);
-  void register_user(uint64 query_id, string first_name, string last_name);
+  void register_user(uint64 query_id, string first_name, string last_name, bool disable_notification);
   void request_qr_code_authentication(uint64 query_id, vector<UserId> other_user_ids);
   void check_bot_token(uint64 query_id, string bot_token);
   void check_password(uint64 query_id, string password);
@@ -196,6 +199,8 @@ class AuthManager final : public NetActor {
   void send_log_out_query();
   void destroy_auth_keys();
 
+  void on_account_banned() const;
+
   void on_sent_code(telegram_api::object_ptr<telegram_api::auth_SentCode> &&sent_code_ptr);
 
   void on_send_code_result(NetQueryPtr &&net_query);
@@ -215,7 +220,7 @@ class AuthManager final : public NetActor {
 
   void on_result(NetQueryPtr net_query) final;
 
-  void update_state(State new_state, bool force = false, bool should_save_state = true);
+  void update_state(State new_state, bool should_save_state = true);
   tl_object_ptr<td_api::AuthorizationState> get_authorization_state_object(State authorization_state) const;
 
   static void send_ok(uint64 query_id);

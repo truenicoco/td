@@ -1,5 +1,5 @@
 //
-// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2023
+// Copyright Aliaksei Levin (levlam@telegram.org), Arseny Smirnov (arseny30@gmail.com) 2014-2024
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -7,7 +7,8 @@
 #pragma once
 
 #include "td/telegram/CustomEmojiId.h"
-#include "td/telegram/FullMessageId.h"
+#include "td/telegram/DialogBoostLinkInfo.h"
+#include "td/telegram/MessageFullId.h"
 #include "td/telegram/MessageLinkInfo.h"
 #include "td/telegram/td_api.h"
 #include "td/telegram/UserId.h"
@@ -71,10 +72,10 @@ class LinkManager final : public Actor {
 
   void get_external_link_info(string &&link, Promise<td_api::object_ptr<td_api::LoginUrlInfo>> &&promise);
 
-  void get_login_url_info(FullMessageId full_message_id, int64 button_id,
+  void get_login_url_info(MessageFullId message_full_id, int64 button_id,
                           Promise<td_api::object_ptr<td_api::LoginUrlInfo>> &&promise);
 
-  void get_login_url(FullMessageId full_message_id, int64 button_id, bool allow_write_access,
+  void get_login_url(MessageFullId message_full_id, int64 button_id, bool allow_write_access,
                      Promise<td_api::object_ptr<td_api::httpUrl>> &&promise);
 
   void get_link_login_url(const string &url, bool allow_write_access,
@@ -97,7 +98,7 @@ class LinkManager final : public Actor {
 
   static string get_instant_view_link(Slice url, Slice rhash);
 
-  static string get_public_dialog_link(Slice username, bool is_internal);
+  static string get_public_dialog_link(Slice username, Slice draft_text, bool is_internal);
 
   static Result<string> get_proxy_link(const Proxy &proxy, bool is_internal);
 
@@ -106,6 +107,8 @@ class LinkManager final : public Actor {
   static string get_t_me_url();
 
   static Result<CustomEmojiId> get_link_custom_emoji_id(Slice url);
+
+  static Result<DialogBoostLinkInfo> get_dialog_boost_link_info(Slice url);
 
   static Result<MessageLinkInfo> get_message_link_info(Slice url);
 
@@ -121,9 +124,11 @@ class LinkManager final : public Actor {
   class InternalLinkBotAddToChannel;
   class InternalLinkBotStart;
   class InternalLinkBotStartInGroup;
+  class InternalLinkBusinessChat;
   class InternalLinkChangePhoneNumber;
   class InternalLinkConfirmPhone;
   class InternalLinkDefaultMessageAutoDeleteTimerSettings;
+  class InternalLinkDialogBoost;
   class InternalLinkDialogFolderInvite;
   class InternalLinkDialogFolderSettings;
   class InternalLinkDialogInvite;
@@ -137,6 +142,8 @@ class LinkManager final : public Actor {
   class InternalLinkMessageDraft;
   class InternalLinkPassportDataRequest;
   class InternalLinkPremiumFeatures;
+  class InternalLinkPremiumGift;
+  class InternalLinkPremiumGiftCode;
   class InternalLinkPrivacyAndSecuritySettings;
   class InternalLinkProxy;
   class InternalLinkPublicDialog;
