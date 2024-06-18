@@ -33,32 +33,3 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: build/libtdjson_linux_amd64.so
-
-  build_freebsd:
-    name: Build FreeBSD x86_64
-    runs-on: macos-12
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v3
-        with:
-          path: tdlib
-
-      - name: Build TDLib
-        uses: vmactions/freebsd-vm@v0
-        with:
-          release: 13.1
-          mem: 3072
-          prepare: |
-            pkg update
-            pkg install -y llvm cmake ninja gperf openssl lzlib gperf
-          run: |
-            mkdir ./build
-            cmake -DCMAKE_BUILD_TYPE=Release -S ./tdlib -B ./build -G Ninja
-            cmake --build ./build --target tdjson --parallel 2
-            strip --strip-all ./build/libtdjson.so.*
-            mv -v ./build/libtdjson.so.* ./build/libtdjson_freebsd_amd64.so
-
-      - name: Release artifacts to packages
-        uses: softprops/action-gh-release@v1
-        with:
-          files: build/libtdjson_freebsd_amd64.so
