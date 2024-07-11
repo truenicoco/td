@@ -8,8 +8,15 @@ on:
 
 jobs:
   build_ubuntu:
-    name: Build Linux x86_64
-    runs-on: ubuntu-latest
+    name: Build Linux
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+          - os: ubuntu-22.04-arm
+            arch: arm64
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
@@ -27,9 +34,9 @@ jobs:
           cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=../tdlib -DTD_ENABLE_LTO=ON -DCMAKE_AR=/usr/bin/llvm-ar-14 -DCMAKE_NM=/usr/bin/llvm-nm-14 -DCMAKE_OBJDUMP=/usr/bin/llvm-objdump-14 -DCMAKE_RANLIB=/usr/bin/llvm-ranlib-14  -S ./tdlib -B ./build
           cmake --build ./build --target tdjson --parallel 2
           strip --strip-all ./build/libtdjson.so.*
-          mv -v ./build/libtdjson.so.* ./build/libtdjson_linux_amd64.so
+          mv -v ./build/libtdjson.so.* ./build/libtdjson_linux_${{matrix.arch}}.so
 
       - name: Release artifacts to packages
         uses: softprops/action-gh-release@v1
         with:
-          files: build/libtdjson_linux_amd64.so
+          files: build/libtdjson_linux_${{matrix.arch}}.so
